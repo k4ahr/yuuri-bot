@@ -17,6 +17,26 @@ async def is_admin_or_role(interaction: discord.Interaction):
     await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
     return False
 
+async def is_supporter_or_admin(interaction: discord.Interaction):
+    if interaction.user.guild_permissions.administrator:
+        return True
+    
+    config = await data_manager.get_server_config(interaction.guild_id)
+    admin_role_id = config.get("admin_role_id")
+    if admin_role_id:
+        role = interaction.guild.get_role(admin_role_id)
+        if role and role in interaction.user.roles:
+            return True
+            
+    supporter_role_id = config.get("supporter_role_id")
+    if supporter_role_id:
+        role = interaction.guild.get_role(supporter_role_id)
+        if role and role in interaction.user.roles:
+            return True
+            
+    await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+    return False
+
 class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -28,6 +48,13 @@ class Admin(commands.Cog):
         await data_manager.set_server_config(interaction.guild_id, "admin_role_id", role.id)
         await interaction.response.send_message(f"Admin role set to {role.mention}.", ephemeral=True)
 
+    @app_commands.command(name="setsupporterrole", description="Set a custom role that can use supporter commands like say.")
+    @app_commands.describe(role="The role to grant supporter privileges to.")
+    @app_commands.default_permissions(administrator=True)
+    async def set_supporter_role(self, interaction: discord.Interaction, role: discord.Role):
+        await data_manager.set_server_config(interaction.guild_id, "supporter_role_id", role.id)
+        await interaction.response.send_message(f"Supporter role set to {role.mention}.", ephemeral=True)
+
     @app_commands.command(name="setlogchannel", description="Set the channel where bot logs will be sent.")
     @app_commands.describe(channel="The text channel for logs.")
     @app_commands.check(is_admin_or_role)
@@ -37,7 +64,7 @@ class Admin(commands.Cog):
 
     @app_commands.command(name="say", description="Send an anonymous message through the bot.")
     @app_commands.describe(message="The message to send.")
-    @app_commands.check(is_admin_or_role)
+    @app_commands.check(is_supporter_or_admin)
     async def say_command(self, interaction: discord.Interaction, message: str):
         await interaction.response.send_message("Message sent!", ephemeral=True)
         await interaction.channel.send(message)
