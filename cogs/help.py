@@ -80,9 +80,9 @@ class Help(commands.Cog):
             file = discord.File(image_path, filename="help_banner.png")
             
         if file:
-            await interaction.response.send_message(embed=embed, view=view, file=file, ephemeral=True)
+            await interaction.response.send_message(embed=embed, view=view, file=file)
         else:
-            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            await interaction.response.send_message(embed=embed, view=view)
 
 async def setup(bot):
     await bot.add_cog(Help(bot))
