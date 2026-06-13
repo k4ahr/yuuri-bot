@@ -82,7 +82,7 @@ class Admin(commands.Cog):
 
     @app_commands.command(name="addresponse", description="Add a random response when the bot is mentioned.")
     @app_commands.describe(response="The text to add.")
-    @app_commands.check(is_admin_or_role)
+    @app_commands.check(is_supporter_or_admin)
     async def add_response(self, interaction: discord.Interaction, response: str):
         config = await data_manager.get_server_config(interaction.guild_id)
         responses = config.get("mention_responses", [])
@@ -91,7 +91,7 @@ class Admin(commands.Cog):
         await interaction.response.send_message(f"Added response: `{response}`", ephemeral=True)
 
     @app_commands.command(name="listresponses", description="List all configured ping responses.")
-    @app_commands.check(is_admin_or_role)
+    @app_commands.check(is_supporter_or_admin)
     async def list_responses(self, interaction: discord.Interaction):
         config = await data_manager.get_server_config(interaction.guild_id)
         responses = config.get("mention_responses", [])
@@ -103,7 +103,7 @@ class Admin(commands.Cog):
 
     @app_commands.command(name="removeresponse", description="Remove a ping response by index.")
     @app_commands.describe(index="The index of the response to remove (see /listresponses).")
-    @app_commands.check(is_admin_or_role)
+    @app_commands.check(is_supporter_or_admin)
     async def remove_response(self, interaction: discord.Interaction, index: int):
         config = await data_manager.get_server_config(interaction.guild_id)
         responses = config.get("mention_responses", [])
