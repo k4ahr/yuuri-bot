@@ -31,4 +31,4 @@ Please refer to our [Privacy Policy](PRIVACY.md) to understand how we collect, s
 These terms may be updated from time to time. Continued use of the Bot after changes have been made constitutes acceptance of the new terms.
 
 ## 8. Contact
-For support, bug reports, or inquiries, please contact the bot developer directly via Discord.
+For support, bug reports, or inquiries, please contact the bot developer directly via [k4ahr@disroot.org].
