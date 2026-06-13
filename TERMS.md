@@ -1,6 +1,6 @@
 # Terms of Service for Yuuri Bot
 
-*Last Updated: [Insert Date]*
+*Last Updated: 14-June-2026*
 
 By adding **Yuuri Bot** ("the Bot") to your Discord server or using its features, you agree to the following Terms of Service. If you do not agree, please do not use the Bot or remove it from your server.
 

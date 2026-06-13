@@ -1,6 +1,6 @@
 # Privacy Policy for Yuuri Bot
 
-*Last Updated: [Insert Date]*
+*Last Updated: 14-June-2026*
 
 This Privacy Policy explains how **Yuuri Bot** ("the Bot") collects, uses, and protects your data when you use its services on Discord. By inviting the Bot to your server or using its commands, you agree to the terms outlined below.
 
