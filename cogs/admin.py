@@ -116,5 +116,26 @@ class Admin(commands.Cog):
         else:
             await interaction.response.send_message("Invalid index.", ephemeral=True)
 
+    @app_commands.command(name="botstats", description="Check how many servers and users the bot is currently in.")
+    @app_commands.default_permissions(administrator=True)
+    async def bot_stats(self, interaction: discord.Interaction):
+        # Ensure only the bot owner can view this sensitive information
+        if not await self.bot.is_owner(interaction.user):
+            return await interaction.response.send_message("Only the bot owner can use this command.", ephemeral=True)
+            
+        guilds = self.bot.guilds
+        total_members = sum(g.member_count for g in guilds if g.member_count is not None)
+        
+        guild_list = "\n".join([f"- {g.name} ({g.member_count} members)" for g in guilds])
+        if len(guild_list) > 1800:
+            guild_list = guild_list[:1800] + "\n... (truncated)"
+            
+        embed = discord.Embed(title="Bot Statistics", color=discord.Color.blue())
+        embed.add_field(name="Total Servers", value=str(len(guilds)), inline=True)
+        embed.add_field(name="Total Users", value=str(total_members), inline=True)
+        embed.description = f"**Servers:**\n{guild_list}"
+        
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
 async def setup(bot):
     await bot.add_cog(Admin(bot))
