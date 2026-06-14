@@ -118,7 +118,7 @@ class Admin(commands.Cog):
 
     @app_commands.command(name="botstats", description="Check how many servers and users the bot is currently in.")
     @app_commands.default_permissions(administrator=True)
-    async def bot_stats(self, interaction: discord.Interaction):
+    async def get_bot_stats(self, interaction: discord.Interaction):
         # Ensure only the bot owner can view this sensitive information
         if not await self.bot.is_owner(interaction.user):
             return await interaction.response.send_message("Only the bot owner can use this command.", ephemeral=True)
