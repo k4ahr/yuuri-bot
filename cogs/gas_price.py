@@ -75,7 +75,7 @@ class GasPrice(commands.Cog):
                         
                         file = None
                         if os.path.exists("assets/images/gas_banner.gif"):
-                            file = discord.File("assets/image/gas_banner.gif", filename="gas_banner.gif")
+                            file = discord.File("assets/images/gas_banner.gif", filename="gas_banner.gif")
                             embed.set_image(url="attachment://gas_banner.gif")
                             
                         if file:
