@@ -8,7 +8,7 @@ load_dotenv()
 
 def load_quotes():
     try:
-        with open("data/quotes.txt", "r", encoding="utf-8") as f:
+        with open("assets/quotes.txt", "r", encoding="utf-8") as f:
             quotes = [line.strip() for line in f if line.strip()]
             return quotes if quotes else ["No quotes available"]
     except FileNotFoundError:
