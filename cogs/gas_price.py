@@ -37,16 +37,14 @@ class GasPrice(commands.Cog):
                     objects = data.get("Objects", [])
                     
                     embed = discord.Embed(
-                        title="⛽ Giá Xăng Dầu Petrolimex", 
-                        color=discord.Color.orange(), 
+                        title="⛽ Bảng Giá Xăng Dầu Petrolimex", 
+                        description="Dưới đây là giá bán lẻ cập nhật mới nhất:\n\n",
+                        color=discord.Color.brand_green(), 
                         url="https://petrolimex.com.vn/",
                         timestamp=discord.utils.utcnow()
                     )
                     
                     added = False
-                    table = "```\n"
-                    table += f"{'Sản phẩm':<22} {'Vùng 1':>11} {'Vùng 2':>11}\n"
-                    table += "─" * 46 + "\n"
                     
                     for item in objects:
                         title = item.get("Title", "")
@@ -57,12 +55,22 @@ class GasPrice(commands.Cog):
                             added = True
                             z1_str = f"{self.format_price(z1)} đ"
                             z2_str = f"{self.format_price(z2)} đ"
-                            table += f"{title:<22} {z1_str:>11} {z2_str:>11}\n"
-                    
-                    table += "```"
+                            
+                            # Decide on an emoji based on fuel type
+                            if "Xăng" in title:
+                                emoji = "🚗"
+                            elif "DO" in title:
+                                emoji = "🚚"
+                            elif "hỏa" in title:
+                                emoji = "🔥"
+                            elif "Mazut" in title:
+                                emoji = "⛴️"
+                            else:
+                                emoji = "💧"
+                                
+                            embed.description += f"**{emoji} {title}**\n> 🟢 `Vùng 1:` **{z1_str}**\n> 🟡 `Vùng 2:` **{z2_str}**\n\n"
                     
                     if added:
-                        embed.description = table
                         embed.set_footer(text="Nguồn: petrolimex.com.vn")
                         
                         file = None
