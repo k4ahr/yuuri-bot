@@ -63,11 +63,25 @@ class Admin(commands.Cog):
         await interaction.response.send_message(f"Log channel set to {channel.mention}.", ephemeral=True)
 
     @app_commands.command(name="say", description="Send an anonymous message through the bot.")
-    @app_commands.describe(message="The message to send.")
+    @app_commands.describe(
+        message="The message to send.",
+        message_id="Optional ID of a message to reply to."
+    )
     @app_commands.check(is_supporter_or_admin)
-    async def say_command(self, interaction: discord.Interaction, message: str):
+    async def say_command(self, interaction: discord.Interaction, message: str, message_id: str = None):
         await interaction.response.send_message("Message sent!", ephemeral=True)
-        await interaction.channel.send(message)
+        
+        reply_to = None
+        if message_id:
+            try:
+                reply_to = await interaction.channel.fetch_message(int(message_id))
+            except (discord.NotFound, discord.HTTPException, ValueError):
+                pass
+                
+        if reply_to:
+            await reply_to.reply(message)
+        else:
+            await interaction.channel.send(message)
         
         config = await data_manager.get_server_config(interaction.guild_id)
         log_channel_id = config.get("log_channel_id")
@@ -77,6 +91,8 @@ class Admin(commands.Cog):
                 embed = discord.Embed(title="Anonymous Say Log", color=discord.Color.red())
                 embed.add_field(name="User", value=interaction.user.mention, inline=True)
                 embed.add_field(name="Channel", value=interaction.channel.mention, inline=True)
+                if message_id:
+                    embed.add_field(name="Reply To ID", value=message_id, inline=True)
                 embed.add_field(name="Message", value=message, inline=False)
                 await log_channel.send(embed=embed)
 

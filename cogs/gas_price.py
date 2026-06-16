@@ -2,6 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import aiohttp
+import os
 
 class GasPrice(commands.Cog):
     def __init__(self, bot):
@@ -35,9 +36,18 @@ class GasPrice(commands.Cog):
                     data = await resp.json()
                     objects = data.get("Objects", [])
                     
-                    embed = discord.Embed(title="Petrolimex Gas Prices", color=discord.Color.orange(), url="https://petrolimex.com.vn/")
+                    embed = discord.Embed(
+                        title="⛽ Giá Xăng Dầu Petrolimex", 
+                        color=discord.Color.orange(), 
+                        url="https://petrolimex.com.vn/",
+                        timestamp=discord.utils.utcnow()
+                    )
                     
                     added = False
+                    table = "```\n"
+                    table += f"{'Sản phẩm':<22} {'Vùng 1':>11} {'Vùng 2':>11}\n"
+                    table += "─" * 46 + "\n"
+                    
                     for item in objects:
                         title = item.get("Title", "")
                         z1 = item.get("Zone1Price", 0)
@@ -45,11 +55,25 @@ class GasPrice(commands.Cog):
                         
                         if title and z1 > 0:
                             added = True
-                            val = f"Vùng 1: {self.format_price(z1)} VNĐ\nVùng 2: {self.format_price(z2)} VNĐ"
-                            embed.add_field(name=title, value=val, inline=False)
+                            z1_str = f"{self.format_price(z1)} đ"
+                            z2_str = f"{self.format_price(z2)} đ"
+                            table += f"{title:<22} {z1_str:>11} {z2_str:>11}\n"
+                    
+                    table += "```"
                     
                     if added:
-                        await interaction.followup.send(embed=embed)
+                        embed.description = table
+                        embed.set_footer(text="Nguồn: petrolimex.com.vn")
+                        
+                        file = None
+                        if os.path.exists("assets/images/gas_banner.gif"):
+                            file = discord.File("assets/image/gas_banner.gif", filename="gas_banner.gif")
+                            embed.set_image(url="attachment://gas_banner.gif")
+                            
+                        if file:
+                            await interaction.followup.send(embed=embed, file=file)
+                        else:
+                            await interaction.followup.send(embed=embed)
                     else:
                         await interaction.followup.send("No prices found.")
             except Exception as e:
