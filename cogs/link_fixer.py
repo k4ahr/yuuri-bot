@@ -12,19 +12,15 @@ URL_REGEX = r'(https?://[^\s]+)'
 PLATFORM_MAP = {
     'twitter': {
         'domains': ['twitter.com', 'www.twitter.com', 'x.com', 'www.x.com'],
-        'replace': 'vxtwitter.com'
+        'replace': 'fixupx.com'
     },
     'tiktok': {
         'domains': ['tiktok.com', 'www.tiktok.com', 'vm.tiktok.com'],
-        'replace': 'vxtiktok.com'
+        'replace': 'tnktok.com'
     },
     'instagram': {
         'domains': ['instagram.com', 'www.instagram.com'],
-        'replace': 'ddinstagram.com'
-    },
-    'reddit': {
-        'domains': ['reddit.com', 'www.reddit.com', 'old.reddit.com'],
-        'replace': 'rxddit.com'
+        'replace': 'kkinstagram.com'
     },
     'facebook': {
         'domains': ['facebook.com', 'www.facebook.com', 'fb.watch', 'www.fb.watch'],
@@ -51,7 +47,7 @@ class EmbedConfigView(discord.ui.View):
         self.add_item(btn)
 
         # Platform toggles
-        platforms = ['twitter', 'tiktok', 'instagram', 'reddit', 'facebook']
+        platforms = ['twitter', 'tiktok', 'instagram', 'facebook']
         for i, platform in enumerate(platforms):
             enabled = self.config.get(platform, True)
             p_style = discord.ButtonStyle.success if enabled else discord.ButtonStyle.danger
@@ -125,8 +121,8 @@ class LinkFixer(commands.Cog):
                             # Ensure we don't mess up paths
                             # Reconstruct URL with new netloc
                             new_url = url.replace(parsed.netloc, data['replace'], 1)
-                            # Prefix with a zero-width space if needed to avoid discord parsing issues? No, standard is fine
-                            fixed_links.append(new_url)
+                            # Hide the URL text using markdown and a zero-width space
+                            fixed_links.append(f"[\u200B]({new_url})")
                         break
             except Exception:
                 pass
