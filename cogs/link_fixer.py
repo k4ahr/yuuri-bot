@@ -15,7 +15,7 @@ PLATFORM_MAP = {
         'replace': 'fixupx.com'
     },
     'tiktok': {
-        'domains': ['tiktok.com', 'www.tiktok.com', 'vm.tiktok.com'],
+        'domains': ['tiktok.com', 'www.tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com'],
         'replace': 'tnktok.com'
     },
     'instagram': {
