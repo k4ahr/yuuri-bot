@@ -35,7 +35,11 @@ MANIFEST
 data/
 *.sqlite3
 *.db
+assets/quotes.txt
 
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Assets
+assets/quotes.txt
