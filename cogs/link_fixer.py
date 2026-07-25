@@ -33,50 +33,65 @@ class EmbedConfigView(discord.ui.View):
         super().__init__(timeout=900) # 15 minutes timeout
         self.guild_id = guild_id
         self.config = config.copy()
-        self.update_buttons()
+        self.update_components()
 
-    def update_buttons(self):
+    def update_components(self):
         self.clear_items()
         
-        # Master Toggle
+        # Master Toggle Button
         master_enabled = self.config.get("master", True)
         style = discord.ButtonStyle.success if master_enabled else discord.ButtonStyle.danger
-        label = "Master: ON" if master_enabled else "Master: OFF"
+        label = "Master Toggle: ON" if master_enabled else "Master Toggle: OFF"
         btn = discord.ui.Button(label=label, style=style, custom_id="toggle_master", row=0)
         btn.callback = self.toggle_master
         self.add_item(btn)
 
-        # Platform toggles
+        # Platforms Select Menu
         platforms = ['twitter', 'tiktok', 'instagram', 'facebook']
-        for i, platform in enumerate(platforms):
+        options = []
+        for platform in platforms:
             enabled = self.config.get(platform, True)
-            p_style = discord.ButtonStyle.success if enabled else discord.ButtonStyle.danger
-            p_label = f"{platform.capitalize()}: ON" if enabled else f"{platform.capitalize()}: OFF"
-            # Disable platform buttons if master is OFF
-            p_btn = discord.ui.Button(label=p_label, style=p_style, custom_id=f"toggle_{platform}", row=1 + (i//3), disabled=not master_enabled)
-            p_btn.callback = self.create_callback(platform)
-            self.add_item(p_btn)
+            desc = "Currently Enabled" if enabled else "Currently Disabled"
+            options.append(discord.SelectOption(
+                label=platform.capitalize(),
+                description=f"Auto-fix {platform.capitalize()} links ({desc})",
+                value=platform,
+                default=enabled
+            ))
+
+        select = discord.ui.Select(
+            custom_id="platform_select",
+            placeholder="Select platforms to enable...",
+            min_values=0,
+            max_values=len(platforms),
+            options=options,
+            disabled=not master_enabled,
+            row=1
+        )
+        select.callback = self.select_callback
+        self.add_item(select)
 
     async def toggle_master(self, interaction: discord.Interaction):
         self.config["master"] = not self.config.get("master", True)
         await self.save_and_update(interaction)
 
-    def create_callback(self, platform):
-        async def callback(interaction: discord.Interaction):
-            self.config[platform] = not self.config.get(platform, True)
-            await self.save_and_update(interaction)
-        return callback
+    async def select_callback(self, interaction: discord.Interaction):
+        selected = interaction.data.get('values', [])
+        platforms = ['twitter', 'tiktok', 'instagram', 'facebook']
+        for platform in platforms:
+            self.config[platform] = platform in selected
+        await self.save_and_update(interaction)
 
     async def save_and_update(self, interaction: discord.Interaction):
         # Save to DB
         await data_manager.set_server_config(self.guild_id, "embed_fixer", self.config)
-        self.update_buttons()
+        self.update_components()
         embed = self.create_embed()
         await interaction.response.edit_message(embed=embed, view=self)
 
     def create_embed(self):
         embed = discord.Embed(title="🔗 Auto Link Fixer Configuration", color=discord.Color.blurple())
-        embed.description = "Toggle which platforms should have their links automatically fixed."
+        embed.description = "Use the dropdown below to select which platforms should have their links automatically fixed."
         return embed
 
 class LinkFixer(commands.Cog):
@@ -121,8 +136,8 @@ class LinkFixer(commands.Cog):
                             # Ensure we don't mess up paths
                             # Reconstruct URL with new netloc
                             new_url = url.replace(parsed.netloc, data['replace'], 1)
-                            # Hide the URL text using markdown and a zero-width space
-                            fixed_links.append(f"[\u200B]({new_url})")
+                            # Format as a clean hyperlink
+                            fixed_links.append(f"[{platform.capitalize()} Post]({new_url})")
                         break
             except Exception:
                 pass
