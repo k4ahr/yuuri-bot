@@ -77,15 +77,25 @@ class NWord(commands.Cog):
 
     @app_commands.command(name="nword", description="HOW MANY NIGGAS DID YOU SAID?.")
     async def wordlb(self, interaction: discord.Interaction):
-        # Respond immediately to prevent interaction timeout
-        await interaction.response.send_message("Scanning messages in the background... I will ping you when it's done!", ephemeral=False)
+        config = await data_manager.get_server_config(interaction.guild_id)
+        cached_data = config.get("nword_cache", {})
         
-        # Start the background task
-        self.bot.loop.create_task(self.run_scan(interaction))
+        if not cached_data.get("last_updated"):
+            # First time scan, might take a while. Run in background.
+            await interaction.response.send_message("Scanning messages in the background... I will ping you when it's done!", ephemeral=False)
+            self.bot.loop.create_task(self.run_scan(interaction, first_time=True))
+        else:
+            # Subsequent scans are fast because of caching. Just defer and wait.
+            await interaction.response.defer(thinking=True)
+            await self.run_scan(interaction, first_time=False)
         
-    async def run_scan(self, interaction: discord.Interaction):
+    async def run_scan(self, interaction: discord.Interaction, first_time: bool):
         if not TARGET_WORDS:
-            await interaction.channel.send(f"{interaction.user.mention} Thankfully this server is racism free.")
+            msg = "Thankfully this server is racism free."
+            if first_time:
+                await interaction.channel.send(f"{interaction.user.mention} {msg}")
+            else:
+                await interaction.followup.send(msg)
             return
             
         config = await data_manager.get_server_config(interaction.guild_id)
@@ -139,7 +149,11 @@ class NWord(commands.Cog):
             await data_manager.set_server_config(interaction.guild_id, "nword_cache", new_cache)
             
         if not counts:
-            await interaction.channel.send(f"{interaction.user.mention} Scanned {scanned_messages} recent messages. No one has said the target words!")
+            msg = f"Scanned {scanned_messages} recent messages. No one has said it recently!"
+            if first_time:
+                await interaction.channel.send(f"{interaction.user.mention} {msg}")
+            else:
+                await interaction.followup.send(msg)
             return
             
         # Sort data
@@ -162,12 +176,19 @@ class NWord(commands.Cog):
         view = NWordView(interaction, wrapped_data, title)
         embed = view.generate_embed()
         
-        # Send the final result pinging the user
-        await interaction.channel.send(
-            content=f"{interaction.user.mention} The scan is complete!",
-            embed=embed, 
-            view=view
-        )
+        if first_time:
+            # Send the final result pinging the user
+            await interaction.channel.send(
+                content=f"{interaction.user.mention} The scan is complete!",
+                embed=embed, 
+                view=view
+            )
+        else:
+            # Respond to the deferred slash command
+            await interaction.followup.send(
+                embed=embed,
+                view=view
+            )
 
 async def setup(bot):
     await bot.add_cog(NWord(bot))
