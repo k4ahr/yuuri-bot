@@ -4,7 +4,7 @@ from discord.ext import commands
 import os
 
 CATEGORIES = {
-    "Admin": ["setadminrole", "setsupporterrole", "setlogchannel", "sethoneypot", "sethoneypotdm", "setnoichu", "ncreset", "embedconfig", "botstats"],
+    "Admin": ["setadminrole", "setsupporterrole", "setlogchannel", "sethoneypot", "sethoneypotdm", "setnoichu", "ncreset", "embedconfig", "botstats", "trigger"],
     "Supporter": ["say", "addresponse", "listresponses", "removeresponse", "danbooru"],
     "Normal": ["nclb", "ncrank", "nccount", "ncdefine", "safebooru", "gas", "help", "ping"]
 }

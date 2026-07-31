@@ -8,9 +8,14 @@ async def is_admin_or_role(interaction: discord.Interaction):
         return True
     
     config = await data_manager.get_server_config(interaction.guild_id)
-    admin_role_id = config.get("admin_role_id")
-    if admin_role_id:
-        role = interaction.guild.get_role(admin_role_id)
+    admin_role_ids = config.get("admin_role_ids", [])
+    
+    old_admin_role_id = config.get("admin_role_id")
+    if old_admin_role_id and old_admin_role_id not in admin_role_ids:
+        admin_role_ids.append(old_admin_role_id)
+        
+    for role_id in admin_role_ids:
+        role = interaction.guild.get_role(role_id)
         if role and role in interaction.user.roles:
             return True
             
@@ -22,9 +27,14 @@ async def is_supporter_or_admin(interaction: discord.Interaction):
         return True
     
     config = await data_manager.get_server_config(interaction.guild_id)
-    admin_role_id = config.get("admin_role_id")
-    if admin_role_id:
-        role = interaction.guild.get_role(admin_role_id)
+    admin_role_ids = config.get("admin_role_ids", [])
+    
+    old_admin_role_id = config.get("admin_role_id")
+    if old_admin_role_id and old_admin_role_id not in admin_role_ids:
+        admin_role_ids.append(old_admin_role_id)
+        
+    for role_id in admin_role_ids:
+        role = interaction.guild.get_role(role_id)
         if role and role in interaction.user.roles:
             return True
             
@@ -41,12 +51,26 @@ class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="setadminrole", description="Set a custom role that can use admin commands.")
-    @app_commands.describe(role="The role to grant admin privileges to.")
+    @app_commands.command(name="setadminrole", description="Toggle a custom role that can use admin commands.")
+    @app_commands.describe(role="The role to grant or revoke admin privileges to.")
     @app_commands.default_permissions(administrator=True)
     async def set_admin_role(self, interaction: discord.Interaction, role: discord.Role):
-        await data_manager.set_server_config(interaction.guild_id, "admin_role_id", role.id)
-        await interaction.response.send_message(f"Admin role set to {role.mention}.", ephemeral=True)
+        config = await data_manager.get_server_config(interaction.guild_id)
+        admin_role_ids = config.get("admin_role_ids", [])
+        
+        old_id = config.get("admin_role_id")
+        if old_id and old_id not in admin_role_ids:
+            admin_role_ids.append(old_id)
+            
+        if role.id in admin_role_ids:
+            admin_role_ids.remove(role.id)
+            action = "removed from"
+        else:
+            admin_role_ids.append(role.id)
+            action = "added to"
+            
+        await data_manager.set_server_config(interaction.guild_id, "admin_role_ids", admin_role_ids)
+        await interaction.response.send_message(f"Role {role.mention} has been {action} admin roles.", ephemeral=True)
 
     @app_commands.command(name="setsupporterrole", description="Set a custom role that can use supporter commands like say.")
     @app_commands.describe(role="The role to grant supporter privileges to.")
