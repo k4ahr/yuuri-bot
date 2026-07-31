@@ -190,5 +190,11 @@ class NWord(commands.Cog):
                 view=view
             )
 
+    @app_commands.command(name="nwordreset", description="Clear the nword leaderboard for this server.")
+    @app_commands.default_permissions(administrator=True)
+    async def nword_reset(self, interaction: discord.Interaction):
+        await data_manager.set_server_config(interaction.guild_id, "nword_cache", {})
+        await interaction.response.send_message("We all heard nothing.", ephemeral=True)
+
 async def setup(bot):
     await bot.add_cog(NWord(bot))
