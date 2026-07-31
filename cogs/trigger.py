@@ -11,18 +11,19 @@ class Trigger(commands.GroupCog, group_name="trigger"):
         super().__init__()
 
     @app_commands.command(name="add", description="Add a new auto-reply trigger for the server.")
-    @app_commands.describe(word="The word or phrase to trigger on.", response="The response to send.")
+    @app_commands.describe(word="The word or phrase to trigger on.", response="The response to send.", reply="True to reply to the user, False to just send in channel.")
     @app_commands.check(is_admin_or_role)
-    async def trigger_add(self, interaction: discord.Interaction, word: str, response: str):
+    async def trigger_add(self, interaction: discord.Interaction, word: str, response: str, reply: bool):
         config = await data_manager.get_server_config(interaction.guild_id)
         triggers = config.get("triggers", {})
         
         # Store in lowercase for case-insensitive matching
         word_lower = word.lower()
-        triggers[word_lower] = response
+        triggers[word_lower] = {"response": response, "reply": reply}
         
         await data_manager.set_server_config(interaction.guild_id, "triggers", triggers)
-        await interaction.response.send_message(f"Added trigger for `{word}` => `{response}`", ephemeral=True)
+        reply_text = "Yes" if reply else "No"
+        await interaction.response.send_message(f"Added trigger for `{word}` => `{response}` (Reply: {reply_text})", ephemeral=True)
 
     @app_commands.command(name="remove", description="Remove an auto-reply trigger.")
     @app_commands.describe(word="The trigger word to remove.")
@@ -50,7 +51,18 @@ class Trigger(commands.GroupCog, group_name="trigger"):
             
         embed = discord.Embed(title="Auto-reply Triggers", color=discord.Color.blurple())
         
-        text = "\n".join([f"**{word}** => {resp}" for word, resp in triggers.items()])
+        lines = []
+        for word, data in triggers.items():
+            if isinstance(data, dict):
+                resp = data.get("response", "")
+                reply = data.get("reply", False)
+            else:
+                resp = data
+                reply = False
+            reply_str = " (Reply: Yes)" if reply else ""
+            lines.append(f"**{word}** => {resp}{reply_str}")
+            
+        text = "\n".join(lines)
         if len(text) > 4096:
             text = text[:4090] + "..."
             
@@ -68,12 +80,22 @@ class Trigger(commands.GroupCog, group_name="trigger"):
             return
 
         content_lower = message.content.lower()
-        for word, response in triggers.items():
+        for word, data in triggers.items():
             escaped_word = re.escape(word)
             # Use bounded match so we don't trigger on substrings inside other words
             pattern = r'\b' + escaped_word + r'\b'
             if re.search(pattern, content_lower):
-                await message.channel.send(response)
+                if isinstance(data, dict):
+                    response_text = data.get("response", "")
+                    should_reply = data.get("reply", False)
+                else:
+                    response_text = data
+                    should_reply = False
+                
+                if should_reply:
+                    await message.reply(response_text)
+                else:
+                    await message.channel.send(response_text)
                 break
 
 async def setup(bot):
