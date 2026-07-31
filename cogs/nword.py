@@ -66,7 +66,7 @@ class NWord(commands.Cog):
         await interaction.response.defer(thinking=True)
         
         if not TARGET_WORDS:
-            return await interaction.followup.send("No target words are hardcoded in the bot.")
+            return await interaction.followup.send("Thankfully this server is racism free.")
             
         counts = defaultdict(int)
         
@@ -97,12 +97,11 @@ class NWord(commands.Cog):
         # Sort data
         sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)
         
-        title = f"Word Leaderboard"
+        title = f"LIST OF THESE RACIST NIGGAS:"
         view = NWordView(interaction, sorted_counts, title)
         embed = view.generate_embed()
         
         await interaction.followup.send(
-            content=f"*(Scanned {scanned_messages} recent messages across all channels)*\n**Target Words:** {', '.join(TARGET_WORDS)}", 
             embed=embed, 
             view=view
         )
