@@ -77,11 +77,16 @@ class NWord(commands.Cog):
 
     @app_commands.command(name="nword", description="HOW MANY NIGGAS DID YOU SAID?.")
     async def wordlb(self, interaction: discord.Interaction):
-        # We defer the response because scanning message history takes a long time
-        await interaction.response.defer(thinking=True)
+        # Respond immediately to prevent interaction timeout
+        await interaction.response.send_message("Scanning messages in the background... I will ping you when it's done!", ephemeral=False)
         
+        # Start the background task
+        self.bot.loop.create_task(self.run_scan(interaction))
+        
+    async def run_scan(self, interaction: discord.Interaction):
         if not TARGET_WORDS:
-            return await interaction.followup.send("Thankfully this server is racism free.")
+            await interaction.channel.send(f"{interaction.user.mention} Thankfully this server is racism free.")
+            return
             
         config = await data_manager.get_server_config(interaction.guild_id)
         cached_data = config.get("nword_cache", {})
@@ -110,8 +115,9 @@ class NWord(commands.Cog):
         # Scan all text channels in the guild
         for channel in interaction.guild.text_channels:
             try:
-                # Limit to 5000 messages per channel to prevent the bot from hanging indefinitely on huge servers
-                async for message in channel.history(limit=5000, after=after_date):
+                # Lower limit to 1000 so the background task doesn't take forever, 
+                # but relies heavily on the caching mechanism over time.
+                async for message in channel.history(limit=1000, after=after_date):
                     scanned_messages += 1
                     if message.author.bot:
                         continue
@@ -133,12 +139,13 @@ class NWord(commands.Cog):
             await data_manager.set_server_config(interaction.guild_id, "nword_cache", new_cache)
             
         if not counts:
-            return await interaction.followup.send(f"Scanned {scanned_messages} recent messages. No one has said the target words!")
+            await interaction.channel.send(f"{interaction.user.mention} Scanned {scanned_messages} recent messages. No one has said the target words!")
+            return
             
         # Sort data
         sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)
         
-        # In order to pass last_updated down to the view, we'll wrap sorted_counts in an object-like structure or just pass it to view directly
+        # In order to pass last_updated down to the view
         class DataWrapper(list):
             def __init__(self, data, last_updated):
                 super().__init__(data)
@@ -155,7 +162,9 @@ class NWord(commands.Cog):
         view = NWordView(interaction, wrapped_data, title)
         embed = view.generate_embed()
         
-        await interaction.followup.send(
+        # Send the final result pinging the user
+        await interaction.channel.send(
+            content=f"{interaction.user.mention} The scan is complete!",
             embed=embed, 
             view=view
         )
