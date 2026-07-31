@@ -3,6 +3,8 @@ from discord import app_commands
 from discord.ext import commands
 import re
 from collections import defaultdict
+from core.data_manager import data_manager
+from datetime import datetime, timezone
 
 # =====================================================================
 # EDIT THIS LIST TO CHANGE THE WORDS YOU WANT TO SEARCH FOR
@@ -41,7 +43,20 @@ class NWordView(discord.ui.View):
             lines.append(f"**#{i}** <@{user_id}>: Said the nword {count} times")
             
         embed.description = "\n".join(lines)
-        embed.set_footer(text=f"Page {self.current_page + 1}/{self.max_pages}")
+        
+        last_updated = self.data.get('last_updated') if isinstance(self.data, dict) else None
+        
+        if last_updated:
+            # Format timestamp nicely
+            try:
+                dt = datetime.fromisoformat(last_updated.replace('Z', '+00:00'))
+                ts_str = f" • Last Scan: <t:{int(dt.timestamp())}:R>"
+            except ValueError:
+                ts_str = ""
+        else:
+            ts_str = ""
+            
+        embed.set_footer(text=f"Page {self.current_page + 1}/{self.max_pages}{ts_str}")
         return embed
 
     @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary, custom_id="prev")
@@ -68,37 +83,76 @@ class NWord(commands.Cog):
         if not TARGET_WORDS:
             return await interaction.followup.send("Thankfully this server is racism free.")
             
-        counts = defaultdict(int)
+        config = await data_manager.get_server_config(interaction.guild_id)
+        cached_data = config.get("nword_cache", {})
         
+        # 'counts' dictionary is keyed by str user_ids
+        counts = defaultdict(int)
+        if "counts" in cached_data:
+            for uid, cnt in cached_data["counts"].items():
+                counts[str(uid)] = cnt
+                
+        last_updated_str = cached_data.get("last_updated")
+        after_date = None
+        if last_updated_str:
+            try:
+                after_date = datetime.fromisoformat(last_updated_str.replace('Z', '+00:00'))
+            except ValueError:
+                pass
+                
         # Compile a regex to find all hardcoded words (case-insensitive)
         patterns = [re.escape(w.lower()) for w in TARGET_WORDS]
         regex = re.compile(r'\b(' + '|'.join(patterns) + r')\b', re.IGNORECASE)
         
         scanned_messages = 0
+        new_matches_found = False
         
         # Scan all text channels in the guild
         for channel in interaction.guild.text_channels:
             try:
                 # Limit to 5000 messages per channel to prevent the bot from hanging indefinitely on huge servers
-                async for message in channel.history(limit=5000):
+                async for message in channel.history(limit=5000, after=after_date):
                     scanned_messages += 1
                     if message.author.bot:
                         continue
                         
                     matches = regex.findall(message.content)
                     if matches:
-                        counts[message.author.id] += len(matches)
+                        counts[str(message.author.id)] += len(matches)
+                        new_matches_found = True
             except (discord.Forbidden, discord.HTTPException):
                 continue
                 
+        # Save updated cache if we found new messages
+        now = discord.utils.utcnow()
+        if new_matches_found or not last_updated_str:
+            new_cache = {
+                "counts": dict(counts),
+                "last_updated": now.isoformat()
+            }
+            await data_manager.set_server_config(interaction.guild_id, "nword_cache", new_cache)
+            
         if not counts:
             return await interaction.followup.send(f"Scanned {scanned_messages} recent messages. No one has said the target words!")
             
         # Sort data
         sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)
         
+        # In order to pass last_updated down to the view, we'll wrap sorted_counts in an object-like structure or just pass it to view directly
+        class DataWrapper(list):
+            def __init__(self, data, last_updated):
+                super().__init__(data)
+                self.last_updated = last_updated
+                
+            def get(self, key):
+                if key == 'last_updated':
+                    return self.last_updated
+                return None
+                
+        wrapped_data = DataWrapper(sorted_counts, now.isoformat())
+        
         title = f"LIST OF THESE RACIST NIGGAS:"
-        view = NWordView(interaction, sorted_counts, title)
+        view = NWordView(interaction, wrapped_data, title)
         embed = view.generate_embed()
         
         await interaction.followup.send(
