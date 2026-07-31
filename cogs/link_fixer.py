@@ -25,8 +25,15 @@ PLATFORM_MAP = {
     'facebook': {
         'domains': ['facebook.com', 'www.facebook.com', 'fb.watch', 'www.fb.watch'],
         'replace': 'facebed.com'
+    },
+    'pixiv': {
+        'domains': ['pixiv.net', 'www.pixiv.net'],
+        'replace': 'phixiv.net'
     }
 }
+
+NORMAL_PLATFORMS = ['twitter', 'tiktok', 'instagram', 'pixiv']
+EXPERIMENTAL_PLATFORMS = ['facebook']
 
 class EmbedConfigView(discord.ui.View):
     def __init__(self, guild_id, config):
@@ -46,39 +53,67 @@ class EmbedConfigView(discord.ui.View):
         btn.callback = self.toggle_master
         self.add_item(btn)
 
-        # Platforms Select Menu
-        platforms = ['twitter', 'tiktok', 'instagram', 'facebook']
-        options = []
-        for platform in platforms:
+        # Normal Platforms Select Menu
+        normal_options = []
+        for platform in NORMAL_PLATFORMS:
             enabled = self.config.get(platform, True)
             desc = "Currently Enabled" if enabled else "Currently Disabled"
-            options.append(discord.SelectOption(
+            normal_options.append(discord.SelectOption(
                 label=platform.capitalize(),
                 description=f"Auto-fix {platform.capitalize()} links ({desc})",
                 value=platform,
                 default=enabled
             ))
 
-        select = discord.ui.Select(
-            custom_id="platform_select",
-            placeholder="Select platforms to enable...",
+        normal_select = discord.ui.Select(
+            custom_id="normal_platform_select",
+            placeholder="Select normal platforms to enable...",
             min_values=0,
-            max_values=len(platforms),
-            options=options,
+            max_values=len(NORMAL_PLATFORMS),
+            options=normal_options,
             disabled=not master_enabled,
             row=1
         )
-        select.callback = self.select_callback
-        self.add_item(select)
+        normal_select.callback = self.normal_select_callback
+        self.add_item(normal_select)
+
+        # Experimental Platforms Select Menu
+        exp_options = []
+        for platform in EXPERIMENTAL_PLATFORMS:
+            enabled = self.config.get(platform, False)
+            desc = "Currently Enabled" if enabled else "Currently Disabled"
+            exp_options.append(discord.SelectOption(
+                label=platform.capitalize(),
+                description=f"Auto-fix {platform.capitalize()} links ({desc})",
+                value=platform,
+                default=enabled
+            ))
+
+        exp_select = discord.ui.Select(
+            custom_id="exp_platform_select",
+            placeholder="Select experimental platforms to enable...",
+            min_values=0,
+            max_values=len(EXPERIMENTAL_PLATFORMS),
+            options=exp_options,
+            disabled=not master_enabled,
+            row=2
+        )
+        exp_select.callback = self.exp_select_callback
+        self.add_item(exp_select)
 
     async def toggle_master(self, interaction: discord.Interaction):
         self.config["master"] = not self.config.get("master", True)
         await self.save_and_update(interaction)
 
-    async def select_callback(self, interaction: discord.Interaction):
+    async def normal_select_callback(self, interaction: discord.Interaction):
         selected = interaction.data.get('values', [])
-        platforms = ['twitter', 'tiktok', 'instagram', 'facebook']
-        for platform in platforms:
+        for platform in NORMAL_PLATFORMS:
+            self.config[platform] = platform in selected
+        await self.save_and_update(interaction)
+
+    async def exp_select_callback(self, interaction: discord.Interaction):
+        selected = interaction.data.get('values', [])
+        for platform in EXPERIMENTAL_PLATFORMS:
             self.config[platform] = platform in selected
         await self.save_and_update(interaction)
 
@@ -132,7 +167,8 @@ class LinkFixer(commands.Cog):
                 # Check each platform
                 for platform, data in PLATFORM_MAP.items():
                     if netloc in data['domains']:
-                        if config.get(platform, True):
+                        default_enabled = platform not in EXPERIMENTAL_PLATFORMS
+                        if config.get(platform, default_enabled):
                             # Ensure we don't mess up paths
                             # Reconstruct URL with new netloc
                             new_url = url.replace(parsed.netloc, data['replace'], 1)

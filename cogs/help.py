@@ -4,9 +4,9 @@ from discord.ext import commands
 import os
 
 CATEGORIES = {
-    "Admin": ["setadminrole", "setsupporterrole", "setlogchannel", "sethoneypot", "sethoneypotdm", "setnoichu", "ncreset"],
-    "Supporter": ["say", "addresponse", "listresponses", "removeresponse"],
-    "Normal": ["nclb", "ncrank", "nccount", "ncdefine", "safebooru", "gas", "help"]
+    "Admin": ["setadminrole", "setsupporterrole", "setlogchannel", "sethoneypot", "sethoneypotdm", "setnoichu", "ncreset", "embedconfig", "botstats"],
+    "Supporter": ["say", "addresponse", "listresponses", "removeresponse", "danbooru"],
+    "Normal": ["nclb", "ncrank", "nccount", "ncdefine", "safebooru", "gas", "help", "ping"]
 }
 
 class HelpView(discord.ui.View):
