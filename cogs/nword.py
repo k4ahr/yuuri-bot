@@ -38,7 +38,7 @@ class NWordView(discord.ui.View):
 
         lines = []
         for i, (user_id, count) in enumerate(page_data, start=start + 1):
-            lines.append(f"**#{i}** <@{user_id}>: {count} times")
+            lines.append(f"**#{i}** <@{user_id}>: Said the nword {count} times")
             
         embed.description = "\n".join(lines)
         embed.set_footer(text=f"Page {self.current_page + 1}/{self.max_pages}")
