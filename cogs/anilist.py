@@ -115,6 +115,57 @@ query ($search: String) {
   manga: Page(perPage: 10) { media(search: $search, type: MANGA) { id, title { english, romaji } } }
   characters: Page(perPage: 10) { characters(search: $search) { id, name { full, native } } }
   staff: Page(perPage: 10) { staff(search: $search) { id, name { full, native } } }
+  users: Page(perPage: 10) { users(search: $search) { id, name } }
+}
+"""
+
+USER_QUERY = """
+query ($id: Int, $name: String) {
+  User(id: $id, name: $name) {
+    id
+    name
+    about(asHtml: false)
+    avatar { large }
+    siteUrl
+    statistics {
+      anime {
+        count
+        minutesWatched
+        meanScore
+        genres(limit: 3, sort: COUNT_DESC) { genre }
+      }
+      manga {
+        count
+        chaptersRead
+        meanScore
+      }
+    }
+  }
+}
+"""
+
+VIEWER_QUERY = """
+query {
+  Viewer {
+    id
+    name
+    about(asHtml: false)
+    avatar { large }
+    siteUrl
+    statistics {
+      anime {
+        count
+        minutesWatched
+        meanScore
+        genres(limit: 3, sort: COUNT_DESC) { genre }
+      }
+      manga {
+        count
+        chaptersRead
+        meanScore
+      }
+    }
+  }
 }
 """
 
@@ -131,7 +182,7 @@ class AniListSearchView(discord.ui.View):
     def update_components(self):
         self.clear_items()
         
-        for cat, label, emoji in [("anime", "Anime", "📺"), ("manga", "Manga", "📖"), ("characters", "Characters", "👤"), ("staff", "Staff", "🎭")]:
+        for cat, label, emoji in [("anime", "Anime", "📺"), ("manga", "Manga", "📖"), ("characters", "Characters", "👤"), ("staff", "Staff", "🎭"), ("users", "Users", "👥")]:
             style = discord.ButtonStyle.primary if self.current_category == cat else discord.ButtonStyle.secondary
             btn = discord.ui.Button(label=label, emoji=emoji, style=style, custom_id=f"cat_{cat}")
             btn.callback = self.make_category_callback(cat)
@@ -142,6 +193,8 @@ class AniListSearchView(discord.ui.View):
         for item in items[:25]:
             if self.current_category in ["anime", "manga"]:
                 title = item["title"]["english"] or item["title"]["romaji"]
+            elif self.current_category == "users":
+                title = item["name"]
             else:
                 title = item["name"]["full"]
             options.append(discord.SelectOption(label=title[:100], value=str(item["id"])))
@@ -160,6 +213,8 @@ class AniListSearchView(discord.ui.View):
         for i, item in enumerate(items[:10], 1):
             if self.current_category in ["anime", "manga"]:
                 title = item["title"]["english"] or item["title"]["romaji"]
+            elif self.current_category == "users":
+                title = item["name"]
             else:
                 title = item["name"]["full"]
             desc += f"**{i}.** {title}\n"
@@ -190,6 +245,11 @@ class AniListSearchView(discord.ui.View):
             embed = await self.cog.build_character_embed(char_id=item_id)
         elif self.current_category == "staff":
             embed = await self.cog.build_staff_embed(staff_id=item_id)
+        elif self.current_category == "users":
+            embed, err = await self.cog.build_user_embed(user_id=item_id)
+            if not embed:
+                await interaction.followup.send(f"❌ {err}")
+                return
             
         if embed:
             await interaction.followup.send(embed=embed)
@@ -368,6 +428,68 @@ class AniList(commands.Cog):
         
         return embed
 
+    async def build_user_embed(self, user_id=None, username=None, discord_user_id=None):
+        variables = {}
+        token = None
+        query = USER_QUERY
+
+        if discord_user_id:
+            user_data = await data_manager.get_user_data(discord_user_id)
+            token = user_data.get("anilist_token")
+            if not token:
+                return None, "This user has not linked their AniList account."
+            query = VIEWER_QUERY
+        else:
+            if user_id: variables["id"] = int(user_id)
+            elif username: variables["name"] = username
+            else: return None, "No user specified."
+            
+        try:
+            data = await self._fetch_graphql(query, variables, token)
+        except Exception as e:
+            return None, f"AniList API Error: {e}"
+
+        if not data:
+            return None, "User not found or profile is private."
+            
+        user = data.get("User") or data.get("Viewer")
+        if not user:
+            return None, "User not found or profile is private."
+
+        url = user.get("siteUrl", f"https://anilist.co/user/{user['id']}")
+        embed = discord.Embed(title=user["name"], url=url, color=0x3db4f2)
+        
+        if user["avatar"]["large"]:
+            embed.set_thumbnail(url=user["avatar"]["large"])
+            
+        desc = self.clean_html(user.get("about"))
+        if desc and desc != "*No description available.*":
+            embed.description = desc
+            
+        stats = user.get("statistics", {})
+        anime_stats = stats.get("anime", {})
+        manga_stats = stats.get("manga", {})
+
+        # Anime Stats
+        a_count = anime_stats.get("count", 0)
+        a_days = round(anime_stats.get("minutesWatched", 0) / 60 / 24, 1) if anime_stats.get("minutesWatched") else 0
+        a_score = anime_stats.get("meanScore", 0)
+        embed.add_field(name="📺 Anime Stats", value=f"**Total**: {a_count:,}\n**Days Watched**: {a_days}\n**Mean Score**: {a_score}%", inline=True)
+
+        # Manga Stats
+        m_count = manga_stats.get("count", 0)
+        m_chapters = manga_stats.get("chaptersRead", 0)
+        m_score = manga_stats.get("meanScore", 0)
+        embed.add_field(name="📖 Manga Stats", value=f"**Total**: {m_count:,}\n**Chapters Read**: {m_chapters:,}\n**Mean Score**: {m_score}%", inline=True)
+
+        # Genres
+        genres = anime_stats.get("genres", [])
+        if genres:
+            genre_list = ", ".join(g["genre"] for g in genres)
+            embed.add_field(name="🏷️ Top Genres", value=genre_list, inline=False)
+
+        return embed, None
+
 
     @anilist.command(name="login", description="Link your AniList account to the bot.")
     async def al_login(self, interaction: discord.Interaction):
@@ -413,6 +535,29 @@ class AniList(commands.Cog):
             
         await data_manager.remove_user_data(interaction.user.id, "anilist_token")
         await interaction.response.send_message("👋 Your AniList account has been unlinked.", ephemeral=True)
+
+    @anilist.command(name="profile", description="View an AniList profile.")
+    @app_commands.describe(user="A Discord user mention (@user) or an AniList username")
+    async def al_profile(self, interaction: discord.Interaction, user: str = None):
+        await interaction.response.defer()
+        
+        embed = None
+        error = None
+        
+        if user:
+            match = re.match(r'^<@!?(\d+)>$', user.strip())
+            if match:
+                discord_id = int(match.group(1))
+                embed, error = await self.build_user_embed(discord_user_id=discord_id)
+            else:
+                embed, error = await self.build_user_embed(username=user.strip())
+        else:
+            embed, error = await self.build_user_embed(discord_user_id=interaction.user.id)
+            
+        if embed:
+            await interaction.followup.send(embed=embed)
+        else:
+            await interaction.followup.send(f"❌ {error}")
 
     @anilist.command(name="search", description="Search AniList across all categories, or paste a link.")
     async def search_all(self, interaction: discord.Interaction, query: str):
