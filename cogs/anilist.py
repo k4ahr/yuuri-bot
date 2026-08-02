@@ -108,19 +108,6 @@ query ($search: String) {
 }
 """
 
-class TokenModal(discord.ui.Modal, title="AniList Login"):
-    token = discord.ui.TextInput(
-        label="AniList Access Token (PIN)",
-        style=discord.TextStyle.short,
-        placeholder="Paste your token here...",
-        required=True
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-        await data_manager.set_user_data(interaction.user.id, "anilist_token", self.token.value)
-        await interaction.response.send_message("✅ Your AniList account has been successfully linked to your Discord account!", ephemeral=True)
-
-
 class AniList(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -149,29 +136,19 @@ class AniList(commands.Cog):
     @anilist.command(name="login", description="Link your AniList account to the bot.")
     async def al_login(self, interaction: discord.Interaction):
         client_id = os.getenv("ANILIST_CLIENT_ID")
-        if not client_id:
-            await interaction.response.send_message("AniList integration is not fully configured (missing Client ID). Please contact the bot admin.", ephemeral=True)
+        redirect_uri = os.getenv("ANILIST_REDIRECT_URI")
+        
+        if not client_id or not redirect_uri:
+            await interaction.response.send_message("AniList integration is not fully configured (missing Client ID or Redirect URI). Please contact the bot admin.", ephemeral=True)
             return
 
-        auth_url = f"https://anilist.co/api/v2/oauth/authorize?client_id={client_id}&response_type=token"
+        state = data_manager.encrypt_string(str(interaction.user.id))
+        auth_url = f"https://anilist.co/api/v2/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&state={state}"
         
         view = discord.ui.View()
+        view.add_item(discord.ui.Button(label="Click to Link AniList Account", url=auth_url, style=discord.ButtonStyle.link))
         
-        # Link button to AniList auth page
-        view.add_item(discord.ui.Button(label="1. Authorize on AniList", url=auth_url, style=discord.ButtonStyle.link))
-        
-        # Callback button to open Modal
-        async def paste_token_callback(btn_interaction: discord.Interaction):
-            if btn_interaction.user.id != interaction.user.id:
-                await btn_interaction.response.send_message("This is not for you.", ephemeral=True)
-                return
-            await btn_interaction.response.send_modal(TokenModal())
-            
-        paste_btn = discord.ui.Button(label="2. Paste Token", style=discord.ButtonStyle.primary)
-        paste_btn.callback = paste_token_callback
-        view.add_item(paste_btn)
-
-        await interaction.response.send_message("To link your AniList account, please click the link below to authorize, then click 'Paste Token' to submit the PIN/token you receive.", view=view, ephemeral=True)
+        await interaction.response.send_message("Please click the button below to authorize the bot on AniList. The linking will happen automatically!", view=view, ephemeral=True)
 
     def clean_html(self, text):
         if not text:

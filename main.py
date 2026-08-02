@@ -3,6 +3,7 @@ import random
 import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
+from core.web_server import start_web_server
 
 load_dotenv()
 
@@ -42,6 +43,12 @@ class YuuriBot(commands.Bot):
         print("Syncing slash commands...")
         await self.tree.sync()
         print("Slash commands synced!")
+        
+        # Start OAuth Web Server
+        try:
+            await start_web_server()
+        except Exception as e:
+            print(f"Failed to start web server: {e}")
 
     @tasks.loop(minutes=10)
     async def change_status(self):

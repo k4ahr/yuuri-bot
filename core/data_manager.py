@@ -141,6 +141,19 @@ class DataManager:
             data[user_str][key] = value
             self._write_encrypted_users_config(data)
 
+    def encrypt_string(self, text: str) -> str:
+        if not self.fernet:
+            return text
+        return self.fernet.encrypt(text.encode('utf-8')).decode('utf-8')
+
+    def decrypt_string(self, encrypted_text: str) -> str:
+        if not self.fernet:
+            return encrypted_text
+        try:
+            return self.fernet.decrypt(encrypted_text.encode('utf-8')).decode('utf-8')
+        except Exception:
+            return ""
+
     async def load_noichu_data(self):
         async with self.noichu_lock:
             try:
