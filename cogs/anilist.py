@@ -482,7 +482,7 @@ class AniList(commands.Cog):
         url = user.get("siteUrl", f"https://anilist.co/user/{user['id']}")
         embed = discord.Embed(title=user["name"], url=url, color=0x3db4f2)
         
-        embed.set_thumbnail(url=f"https://img.anili.st/user/{user['id']}")
+        embed.set_image(url=f"https://img.anili.st/user/{user['id']}")
             
         desc = self.clean_html(user.get("about"))
         if desc and desc != "*No description available.*":
