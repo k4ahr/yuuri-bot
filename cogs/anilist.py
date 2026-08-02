@@ -256,8 +256,8 @@ class AniList(commands.Cog):
             color=0x02a9ff if mtype == "ANIME" else 0xe85d75
         )
         
-        if media["coverImage"]["large"]:
-            embed.set_image(url=media["coverImage"]["large"])
+        # Use img.anili.st for media covers as requested
+        embed.set_image(url=f"https://img.anili.st/media/{media['id']}")
             
         desc = self.clean_html(media["description"])
         embed.description = f"**{title_romaji}**\n\n{desc}"
