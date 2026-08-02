@@ -6,7 +6,7 @@ import os
 CATEGORIES = {
     "Admin": ["rolesconfig", "setlogchannel", "sethoneypot", "sethoneypotdm", "setnoichu", "ncreset", "embedconfig", "botstats", "trigger"],
     "Supporter": ["say", "addresponse", "listresponses", "removeresponse", "danbooru"],
-    "Normal": ["nclb", "ncrank", "nccount", "ncdefine", "safebooru", "gas", "help", "ping"]
+    "Normal": ["nclb", "ncrank", "nccount", "ncdefine", "safebooru", "gas", "help", "ping", "privacy"]
 }
 
 class HelpView(discord.ui.View):
@@ -83,6 +83,15 @@ class Help(commands.Cog):
             await interaction.response.send_message(embed=embed, view=view, file=file)
         else:
             await interaction.response.send_message(embed=embed, view=view)
+
+    @app_commands.command(name="privacy", description="See the bot's privacy terms")
+    async def privacy_command(self, interaction: discord.Interaction):
+        image_path = os.path.join("assets", "images", "privacy.jpg")
+        if os.path.exists(image_path):
+            file = discord.File(image_path, filename="privacy.jpg")
+            await interaction.response.send_message("Here are the privacy terms for Yuuri Bot:", file=file)
+        else:
+            await interaction.response.send_message("The privacy terms image is currently unavailable.")
 
 async def setup(bot):
     await bot.add_cog(Help(bot))

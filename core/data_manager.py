@@ -7,11 +7,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class DataManager:
-    def __init__(self, config_filepath="data/servers_config.enc", noichu_filepath="data/noichu_progress.json"):
+    def __init__(self, config_filepath="data/servers_config.enc", noichu_filepath="data/noichu_progress.json", users_config_filepath="data/users_config.enc"):
         self.config_filepath = config_filepath
         self.noichu_filepath = noichu_filepath
+        self.users_config_filepath = users_config_filepath
         self.config_lock = asyncio.Lock()
         self.noichu_lock = asyncio.Lock()
+        self.users_lock = asyncio.Lock()
         
         self.encryption_key = os.getenv("ENCRYPTION_KEY")
         if self.encryption_key:
@@ -36,6 +38,9 @@ class DataManager:
 
         if not os.path.exists(self.config_filepath):
             self._write_encrypted_config({})
+            
+        if not os.path.exists(self.users_config_filepath):
+            self._write_encrypted_users_config({})
         
         if not os.path.exists(self.noichu_filepath):
             with open(self.noichu_filepath, "w", encoding="utf-8") as f:
@@ -68,11 +73,11 @@ class DataManager:
         except Exception as e:
             print(f"Error during migration: {e}")
 
-    def _read_encrypted_config(self):
+    def _read_encrypted(self, filepath):
         if not self.fernet:
             return {}
         try:
-            with open(self.config_filepath, "rb") as f:
+            with open(filepath, "rb") as f:
                 encrypted_data = f.read()
             if not encrypted_data:
                 return {}
@@ -81,20 +86,32 @@ class DataManager:
         except FileNotFoundError:
             return {}
         except Exception as e:
-            print(f"Error reading encrypted config: {e}")
+            print(f"Error reading encrypted config {filepath}: {e}")
             return {}
 
-    def _write_encrypted_config(self, data):
+    def _write_encrypted(self, filepath, data):
         if not self.fernet:
-            print("WARNING: Cannot save config, ENCRYPTION_KEY missing.")
+            print(f"WARNING: Cannot save config {filepath}, ENCRYPTION_KEY missing.")
             return
         try:
             json_data = json.dumps(data, ensure_ascii=False).encode('utf-8')
             encrypted_data = self.fernet.encrypt(json_data)
-            with open(self.config_filepath, "wb") as f:
+            with open(filepath, "wb") as f:
                 f.write(encrypted_data)
         except Exception as e:
-            print(f"Error writing encrypted config: {e}")
+            print(f"Error writing encrypted config {filepath}: {e}")
+
+    def _read_encrypted_config(self):
+        return self._read_encrypted(self.config_filepath)
+
+    def _write_encrypted_config(self, data):
+        self._write_encrypted(self.config_filepath, data)
+        
+    def _read_encrypted_users_config(self):
+        return self._read_encrypted(self.users_config_filepath)
+
+    def _write_encrypted_users_config(self, data):
+        self._write_encrypted(self.users_config_filepath, data)
 
     async def get_server_config(self, guild_id):
         async with self.config_lock:
@@ -109,6 +126,20 @@ class DataManager:
                 data[guild_str] = {}
             data[guild_str][key] = value
             self._write_encrypted_config(data)
+
+    async def get_user_data(self, user_id):
+        async with self.users_lock:
+            data = self._read_encrypted_users_config()
+            return data.get(str(user_id), {})
+
+    async def set_user_data(self, user_id, key, value):
+        async with self.users_lock:
+            data = self._read_encrypted_users_config()
+            user_str = str(user_id)
+            if user_str not in data:
+                data[user_str] = {}
+            data[user_str][key] = value
+            self._write_encrypted_users_config(data)
 
     async def load_noichu_data(self):
         async with self.noichu_lock:
