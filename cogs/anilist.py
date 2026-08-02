@@ -135,6 +135,11 @@ class AniList(commands.Cog):
 
     @anilist.command(name="login", description="Link your AniList account to the bot.")
     async def al_login(self, interaction: discord.Interaction):
+        user_data = await data_manager.get_user_data(interaction.user.id)
+        if user_data.get("anilist_token"):
+            await interaction.response.send_message("You are already logged in to AniList!", ephemeral=True)
+            return
+            
         client_id = os.getenv("ANILIST_CLIENT_ID")
         redirect_uri = os.getenv("ANILIST_REDIRECT_URI")
         
@@ -166,6 +171,11 @@ class AniList(commands.Cog):
 
     @anilist.command(name="logout", description="Unlink your AniList account from the bot.")
     async def al_logout(self, interaction: discord.Interaction):
+        user_data = await data_manager.get_user_data(interaction.user.id)
+        if not user_data.get("anilist_token"):
+            await interaction.response.send_message("You haven't logged in to AniList yet.", ephemeral=True)
+            return
+            
         await data_manager.remove_user_data(interaction.user.id, "anilist_token")
         await interaction.response.send_message("👋 Your AniList account has been unlinked.", ephemeral=True)
 
