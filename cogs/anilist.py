@@ -9,6 +9,26 @@ from core.data_manager import data_manager
 
 ANILIST_API_URL = "https://graphql.anilist.co"
 
+USER_ADV_QUERY = """
+query ($userId: Int!) {
+  followers: Page(perPage: 1) { pageInfo { total } followers(userId: $userId) { id } }
+  following: Page(perPage: 1) { pageInfo { total } following(userId: $userId) { id } }
+  
+  topAnime: Page(perPage: 3) { 
+    mediaList(userId: $userId, type: ANIME, sort: [SCORE_DESC, UPDATED_TIME_DESC], status: COMPLETED) { 
+      score 
+      media { title { english romaji } } 
+    } 
+  }
+  topManga: Page(perPage: 3) { 
+    mediaList(userId: $userId, type: MANGA, sort: [SCORE_DESC, UPDATED_TIME_DESC], status: COMPLETED) { 
+      score 
+      media { title { english romaji } } 
+    } 
+  }
+}
+"""
+
 # GraphQL Queries
 MEDIA_QUERY = """
 query ($search: String, $id: Int, $type: MediaType) {
@@ -430,25 +450,6 @@ class AniList(commands.Cog):
         
         return embed
 
-USER_ADV_QUERY = """
-query ($userId: Int!) {
-  followers: Page(perPage: 1) { pageInfo { total } followers(userId: $userId) { id } }
-  following: Page(perPage: 1) { pageInfo { total } following(userId: $userId) { id } }
-  
-  topAnime: Page(perPage: 3) { 
-    mediaList(userId: $userId, type: ANIME, sort: [SCORE_DESC, UPDATED_TIME_DESC], status: COMPLETED) { 
-      score 
-      media { title { english romaji } } 
-    } 
-  }
-  topManga: Page(perPage: 3) { 
-    mediaList(userId: $userId, type: MANGA, sort: [SCORE_DESC, UPDATED_TIME_DESC], status: COMPLETED) { 
-      score 
-      media { title { english romaji } } 
-    } 
-  }
-}
-"""
 
     async def build_user_embed(self, user_id=None, username=None, discord_user_id=None):
         variables = {}
