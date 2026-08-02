@@ -164,6 +164,20 @@ class LinkFixer(commands.Cog):
                 parsed = urlparse(url)
                 netloc = parsed.netloc.lower()
                 
+                # Custom AniList handling
+                if "anilist.co" in netloc:
+                    match = re.search(r'anilist\.co/(anime|manga|character|staff)/(\d+)', url)
+                    if match:
+                        category, item_id = match.groups()
+                        self.bot.dispatch("anilist_link_detected", message, category, int(item_id))
+                        # Still suppress embed
+                        await asyncio.sleep(1)
+                        try:
+                            await message.edit(suppress=True)
+                        except discord.Forbidden:
+                            pass
+                        continue
+                
                 # Check each platform
                 for platform, data in PLATFORM_MAP.items():
                     if netloc in data['domains']:
