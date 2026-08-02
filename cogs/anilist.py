@@ -153,11 +153,27 @@ class AniListSearchView(discord.ui.View):
         select.callback = self.select_callback
         self.add_item(select)
 
+    def generate_embed(self):
+        desc = "Select a category and choose a result from the dropdown below.\n\n"
+        items = self.search_data.get(self.current_category, {}).get("media" if self.current_category in ["anime", "manga"] else self.current_category, [])
+        
+        for i, item in enumerate(items[:10], 1):
+            if self.current_category in ["anime", "manga"]:
+                title = item["title"]["english"] or item["title"]["romaji"]
+            else:
+                title = item["name"]["full"]
+            desc += f"**{i}.** {title}\n"
+            
+        if not items:
+            desc += "*No results found in this category.*"
+            
+        return discord.Embed(title=f"Search Results for '{self.query}'", description=desc, color=0x02a9ff)
+
     def make_category_callback(self, category):
         async def callback(interaction: discord.Interaction):
             self.current_category = category
             self.update_components()
-            await interaction.response.edit_message(view=self)
+            await interaction.response.edit_message(embed=self.generate_embed(), view=self)
         return callback
 
     async def select_callback(self, interaction: discord.Interaction):
@@ -428,7 +444,7 @@ class AniList(commands.Cog):
             return
             
         view = AniListSearchView(self, interaction, data, query)
-        embed = discord.Embed(title=f"Search Results for '{query}'", description="Select a category and choose a result from the dropdown below.", color=0x02a9ff)
+        embed = view.generate_embed()
         await interaction.followup.send(embed=embed, view=view)
 
     @anilist.command(name="anime", description="Search for an anime on AniList")
