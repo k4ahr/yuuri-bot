@@ -127,12 +127,13 @@ query ($id: Int, $name: String) {
     about(asHtml: false)
     avatar { large }
     siteUrl
+    updatedAt
     statistics {
       anime {
         count
         minutesWatched
         meanScore
-        genres(limit: 3, sort: COUNT_DESC) { genre }
+        genres(limit: 5, sort: COUNT_DESC) { genre }
       }
       manga {
         count
@@ -152,12 +153,13 @@ query {
     about(asHtml: false)
     avatar { large }
     siteUrl
+    updatedAt
     statistics {
       anime {
         count
         minutesWatched
         meanScore
-        genres(limit: 3, sort: COUNT_DESC) { genre }
+        genres(limit: 5, sort: COUNT_DESC) { genre }
       }
       manga {
         count
@@ -428,6 +430,26 @@ class AniList(commands.Cog):
         
         return embed
 
+USER_ADV_QUERY = """
+query ($userId: Int!) {
+  followers: Page(perPage: 1) { pageInfo { total } followers(userId: $userId) { id } }
+  following: Page(perPage: 1) { pageInfo { total } following(userId: $userId) { id } }
+  
+  topAnime: Page(perPage: 3) { 
+    mediaList(userId: $userId, type: ANIME, sort: [SCORE_DESC, UPDATED_TIME_DESC], status: COMPLETED) { 
+      score 
+      media { title { english romaji } } 
+    } 
+  }
+  topManga: Page(perPage: 3) { 
+    mediaList(userId: $userId, type: MANGA, sort: [SCORE_DESC, UPDATED_TIME_DESC], status: COMPLETED) { 
+      score 
+      media { title { english romaji } } 
+    } 
+  }
+}
+"""
+
     async def build_user_embed(self, user_id=None, username=None, discord_user_id=None):
         variables = {}
         token = None
@@ -459,8 +481,7 @@ class AniList(commands.Cog):
         url = user.get("siteUrl", f"https://anilist.co/user/{user['id']}")
         embed = discord.Embed(title=user["name"], url=url, color=0x3db4f2)
         
-        if user["avatar"]["large"]:
-            embed.set_thumbnail(url=user["avatar"]["large"])
+        embed.set_thumbnail(url=f"https://img.anili.st/user/{user['id']}")
             
         desc = self.clean_html(user.get("about"))
         if desc and desc != "*No description available.*":
@@ -469,6 +490,17 @@ class AniList(commands.Cog):
         stats = user.get("statistics", {})
         anime_stats = stats.get("anime", {})
         manga_stats = stats.get("manga", {})
+
+        # Fetch advanced stats
+        adv_data = None
+        try:
+            adv_data = await self._fetch_graphql(USER_ADV_QUERY, {"userId": user["id"]})
+        except Exception:
+            pass
+
+        followers = adv_data.get("followers", {}).get("pageInfo", {}).get("total", 0) if adv_data else 0
+        following = adv_data.get("following", {}).get("pageInfo", {}).get("total", 0) if adv_data else 0
+        embed.add_field(name="👥 Network", value=f"**Followers**: {followers:,} | **Following**: {following:,}", inline=False)
 
         # Anime Stats
         a_count = anime_stats.get("count", 0)
@@ -487,6 +519,31 @@ class AniList(commands.Cog):
         if genres:
             genre_list = ", ".join(g["genre"] for g in genres)
             embed.add_field(name="🏷️ Top Genres", value=genre_list, inline=False)
+            
+        if adv_data:
+            top_a = adv_data.get("topAnime", {}).get("mediaList", [])
+            if top_a:
+                val = ""
+                for entry in top_a:
+                    title = entry["media"]["title"]["english"] or entry["media"]["title"]["romaji"]
+                    score_str = f"⭐ {entry['score']}" if entry.get("score") else "*(Unrated)*"
+                    val += f"• {title[:40]} - {score_str}\n"
+                embed.add_field(name="🏆 Top Anime", value=val, inline=True)
+                
+            top_m = adv_data.get("topManga", {}).get("mediaList", [])
+            if top_m:
+                val = ""
+                for entry in top_m:
+                    title = entry["media"]["title"]["english"] or entry["media"]["title"]["romaji"]
+                    score_str = f"⭐ {entry['score']}" if entry.get("score") else "*(Unrated)*"
+                    val += f"• {title[:40]} - {score_str}\n"
+                embed.add_field(name="📚 Top Manga", value=val, inline=True)
+
+        # Last Activity
+        if user.get("updatedAt"):
+            import datetime
+            dt = datetime.datetime.fromtimestamp(user["updatedAt"])
+            embed.set_footer(text=f"Last Active: {dt.strftime('%Y-%m-%d %H:%M:%S')}")
 
         return embed, None
 
@@ -537,7 +594,7 @@ class AniList(commands.Cog):
         await interaction.response.send_message("👋 Your AniList account has been unlinked.", ephemeral=True)
 
     @anilist.command(name="profile", description="View an AniList profile.")
-    @app_commands.describe(user="A Discord user mention (@user) or an AniList username")
+    @app_commands.describe(user="Discord ping (@user), AniList username, ID, or profile URL")
     async def al_profile(self, interaction: discord.Interaction, user: str = None):
         await interaction.response.defer()
         
@@ -545,12 +602,23 @@ class AniList(commands.Cog):
         error = None
         
         if user:
-            match = re.match(r'^<@!?(\d+)>$', user.strip())
+            user = user.strip()
+            match = re.match(r'^<@!?(\d+)>$', user)
+            url_match = re.search(r'anilist\.co/user/([^/]+)', user)
+            
             if match:
                 discord_id = int(match.group(1))
                 embed, error = await self.build_user_embed(discord_user_id=discord_id)
+            elif url_match:
+                item_id = url_match.group(1)
+                if item_id.isdigit():
+                    embed, error = await self.build_user_embed(user_id=int(item_id))
+                else:
+                    embed, error = await self.build_user_embed(username=item_id)
+            elif user.isdigit():
+                embed, error = await self.build_user_embed(user_id=int(user))
             else:
-                embed, error = await self.build_user_embed(username=user.strip())
+                embed, error = await self.build_user_embed(username=user)
         else:
             embed, error = await self.build_user_embed(discord_user_id=interaction.user.id)
             
@@ -564,7 +632,7 @@ class AniList(commands.Cog):
         await interaction.response.defer()
         
         # Check if URL
-        match = re.search(r'anilist\.co/(anime|manga|character|staff)/(\d+)', query.lower())
+        match = re.search(r'anilist\.co/(anime|manga|character|staff|user)/([^/]+)', query.lower())
         if match:
             category, item_id = match.groups()
             embed = None
@@ -572,6 +640,9 @@ class AniList(commands.Cog):
             elif category == "manga": embed = await self.build_media_embed(interaction.user.id, media_id=item_id, media_type="MANGA")
             elif category == "character": embed = await self.build_character_embed(char_id=item_id)
             elif category == "staff": embed = await self.build_staff_embed(staff_id=item_id)
+            elif category == "user":
+                if item_id.isdigit(): embed, _ = await self.build_user_embed(user_id=int(item_id))
+                else: embed, _ = await self.build_user_embed(username=item_id)
             
             if embed: await interaction.followup.send(embed=embed)
             else: await interaction.followup.send("❌ Invalid AniList link or data not found.")
@@ -621,12 +692,17 @@ class AniList(commands.Cog):
         else: await interaction.followup.send(f"❌ Could not find any staff matching `{query}`.")
 
     @commands.Cog.listener()
-    async def on_anilist_link_detected(self, message: discord.Message, category: str, item_id: int):
+    async def on_anilist_link_detected(self, message: discord.Message, category: str, item_id):
         embed = None
         if category == "anime": embed = await self.build_media_embed(message.author.id, media_id=item_id, media_type="ANIME")
         elif category == "manga": embed = await self.build_media_embed(message.author.id, media_id=item_id, media_type="MANGA")
         elif category == "character": embed = await self.build_character_embed(char_id=item_id)
         elif category == "staff": embed = await self.build_staff_embed(staff_id=item_id)
+        elif category == "user":
+            if str(item_id).isdigit():
+                embed, _ = await self.build_user_embed(user_id=int(item_id))
+            else:
+                embed, _ = await self.build_user_embed(username=str(item_id))
         
         if embed:
             await message.reply(embed=embed, mention_author=False)

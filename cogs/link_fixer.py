@@ -167,10 +167,10 @@ class LinkFixer(commands.Cog):
                 # Custom AniList handling
                 if "anilist.co" in netloc:
                     if config.get("anilist", True):
-                        match = re.search(r'anilist\.co/(anime|manga|character|staff)/(\d+)', url)
+                        match = re.search(r'anilist\.co/(anime|manga|character|staff|user)/([^/]+)', url)
                         if match:
                             category, item_id = match.groups()
-                            self.bot.dispatch("anilist_link_detected", message, category, int(item_id))
+                            self.bot.dispatch("anilist_link_detected", message, category, item_id)
                             # Still suppress embed
                             await asyncio.sleep(1)
                             try:
