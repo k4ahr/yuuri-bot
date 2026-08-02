@@ -191,6 +191,12 @@ query {
 }
 """
 
+class AniListAPIError(Exception):
+    def __init__(self, status_code, message):
+        self.status_code = status_code
+        self.message = message
+        super().__init__(f"API Error {status_code}: {message}")
+
 class AniListSearchView(discord.ui.View):
     def __init__(self, cog, interaction, search_data, query):
         super().__init__(timeout=300)
@@ -200,6 +206,15 @@ class AniListSearchView(discord.ui.View):
         self.query = query
         self.current_category = "anime"
         self.update_components()
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
+        if isinstance(error, AniListAPIError):
+            file = discord.File("assets/images/api_down.jpg")
+            content = f"**Error {error.status_code}**: {error.message}"
+            try:
+                if interaction.response.is_done(): await interaction.followup.send(content=content, file=file)
+                else: await interaction.response.send_message(content=content, file=file)
+            except Exception: pass
 
     def update_components(self):
         self.clear_items()
@@ -285,6 +300,17 @@ class AniList(commands.Cog):
         
     anilist = app_commands.Group(name="anilist", description="AniList integration commands")
 
+    async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        original = getattr(error, 'original', error)
+        if isinstance(original, AniListAPIError):
+            file = discord.File("assets/images/api_down.jpg")
+            content = f"**Error {original.status_code}**: {original.message}"
+            try:
+                if interaction.response.is_done(): await interaction.followup.send(content=content, file=file)
+                else: await interaction.response.send_message(content=content, file=file)
+            except Exception: pass
+            return
+
     async def _fetch_graphql(self, query: str, variables: dict, token: str = None):
         headers = {
             "Content-Type": "application/json",
@@ -293,16 +319,32 @@ class AniList(commands.Cog):
         if token:
             headers["Authorization"] = f"Bearer {token}"
             
-        async with aiohttp.ClientSession() as session:
-            async with session.post(ANILIST_API_URL, json={"query": query, "variables": variables}, headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data.get("data")
-                elif resp.status == 404:
-                    return None
-                else:
-                    text = await resp.text()
-                    raise Exception(f"API Error {resp.status}: {text}")
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(ANILIST_API_URL, json={"query": query, "variables": variables}, headers=headers) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        if "errors" in data and not data.get("data"):
+                            err_msg = data["errors"][0].get("message", "Unknown error")
+                            status = data["errors"][0].get("status", 200)
+                            raise AniListAPIError(status, err_msg)
+                        return data.get("data")
+                    elif resp.status == 404:
+                        return None
+                    else:
+                        try:
+                            data = await resp.json()
+                            if "errors" in data and len(data["errors"]) > 0:
+                                err_msg = data["errors"][0].get("message", "Unknown error")
+                                status = data["errors"][0].get("status", resp.status)
+                                raise AniListAPIError(status, err_msg)
+                        except Exception as parse_err:
+                            if isinstance(parse_err, AniListAPIError): raise
+                        raise AniListAPIError(resp.status, "API is currently down or unresponsive.")
+        except AniListAPIError:
+            raise
+        except Exception:
+            raise AniListAPIError("Unknown", "Connection error")
 
     def clean_html(self, text):
         if not text:
@@ -469,6 +511,8 @@ class AniList(commands.Cog):
             
         try:
             data = await self._fetch_graphql(query, variables, token)
+        except AniListAPIError:
+            raise
         except Exception as e:
             return None, f"AniList API Error: {e}"
 
@@ -652,8 +696,10 @@ class AniList(commands.Cog):
         # Fetch master search
         try:
             data = await self._fetch_graphql(MASTER_SEARCH_QUERY, {"search": query})
+        except AniListAPIError:
+            raise
         except Exception as e:
-            await interaction.followup.send(f"❌ An error occurred: {e}")
+            await interaction.followup.send("❌ An error occurred while searching.")
             return
 
         if not data:
@@ -694,19 +740,24 @@ class AniList(commands.Cog):
 
     @commands.Cog.listener()
     async def on_anilist_link_detected(self, message: discord.Message, category: str, item_id):
-        embed = None
-        if category == "anime": embed = await self.build_media_embed(message.author.id, media_id=item_id, media_type="ANIME")
-        elif category == "manga": embed = await self.build_media_embed(message.author.id, media_id=item_id, media_type="MANGA")
-        elif category == "character": embed = await self.build_character_embed(char_id=item_id)
-        elif category == "staff": embed = await self.build_staff_embed(staff_id=item_id)
-        elif category == "user":
-            if str(item_id).isdigit():
-                embed, _ = await self.build_user_embed(user_id=int(item_id))
-            else:
-                embed, _ = await self.build_user_embed(username=str(item_id))
-        
-        if embed:
-            await message.reply(embed=embed, mention_author=False)
+        try:
+            embed = None
+            if category == "anime": embed = await self.build_media_embed(message.author.id, media_id=item_id, media_type="ANIME")
+            elif category == "manga": embed = await self.build_media_embed(message.author.id, media_id=item_id, media_type="MANGA")
+            elif category == "character": embed = await self.build_character_embed(char_id=item_id)
+            elif category == "staff": embed = await self.build_staff_embed(staff_id=item_id)
+            elif category == "user":
+                if str(item_id).isdigit():
+                    embed, _ = await self.build_user_embed(user_id=int(item_id))
+                else:
+                    embed, _ = await self.build_user_embed(username=str(item_id))
+            
+            if embed:
+                await message.reply(embed=embed, mention_author=False)
+        except AniListAPIError as e:
+            file = discord.File("assets/images/api_down.jpg")
+            content = f"**Error {e.status_code}**: {e.message}"
+            await message.reply(content=content, file=file, mention_author=False)
 
 async def setup(bot):
     await bot.add_cog(AniList(bot))
