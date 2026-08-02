@@ -89,7 +89,7 @@ class Help(commands.Cog):
         image_path = os.path.join("assets", "images", "privacy.jpg")
         if os.path.exists(image_path):
             file = discord.File(image_path, filename="privacy.jpg")
-            await interaction.response.send_message("Here are the privacy terms for Yuuri Bot:", file=file)
+            await interaction.response.send_message(file=file)
         else:
             await interaction.response.send_message("The privacy terms image is currently unavailable.")
 
