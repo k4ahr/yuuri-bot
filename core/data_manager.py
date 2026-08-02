@@ -140,6 +140,14 @@ class DataManager:
                 data[user_str] = {}
             data[user_str][key] = value
             self._write_encrypted_users_config(data)
+            
+    async def remove_user_data(self, user_id, key):
+        async with self.users_lock:
+            data = self._read_encrypted_users_config()
+            user_str = str(user_id)
+            if user_str in data and key in data[user_str]:
+                del data[user_str][key]
+                self._write_encrypted_users_config(data)
 
     def encrypt_string(self, text: str) -> str:
         if not self.fernet:

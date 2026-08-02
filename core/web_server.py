@@ -3,6 +3,8 @@ import aiohttp
 from aiohttp import web
 from core.data_manager import data_manager
 
+_bot = None
+
 async def handle_callback(request):
     code = request.query.get('code')
     state = request.query.get('state')
@@ -44,6 +46,8 @@ async def handle_callback(request):
                 access_token = data.get("access_token")
                 if access_token:
                     await data_manager.set_user_data(user_id, "anilist_token", access_token)
+                    if _bot:
+                        _bot.dispatch("anilist_login", user_id, True)
                     html = """
                     <html>
                     <head><title>Success</title><style>body { font-family: sans-serif; text-align: center; margin-top: 50px; background: #1a1a1a; color: #fff; }</style></head>
@@ -60,9 +64,13 @@ async def handle_callback(request):
                     return web.Response(text=html, content_type="text/html")
             
             error_text = await resp.text()
+            if _bot:
+                _bot.dispatch("anilist_login", user_id, False)
             return web.Response(text=f"Failed to fetch token from AniList: {resp.status} {error_text}", status=400)
 
-async def start_web_server():
+async def start_web_server(bot):
+    global _bot
+    _bot = bot
     app = web.Application()
     app.router.add_get('/callback', handle_callback)
     

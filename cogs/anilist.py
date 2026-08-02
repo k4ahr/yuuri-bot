@@ -149,15 +149,34 @@ class AniList(commands.Cog):
         view.add_item(discord.ui.Button(label="Click to Link AniList Account", url=auth_url, style=discord.ButtonStyle.link))
         
         await interaction.response.send_message("Please click the button below to authorize the bot on AniList. The linking will happen automatically!", view=view, ephemeral=True)
+        
+        import asyncio
+        try:
+            user_id, success = await self.bot.wait_for(
+                'anilist_login', 
+                check=lambda u, s: u == interaction.user.id, 
+                timeout=300.0
+            )
+            if success:
+                await interaction.edit_original_response(content="✅ **Your AniList account has been successfully linked!**", view=None)
+            else:
+                await interaction.edit_original_response(content="❌ **Failed to link your AniList account.**", view=None)
+        except asyncio.TimeoutError:
+            await interaction.edit_original_response(content="⏳ **Login timed out. Please try running the command again.**", view=None)
+
+    @anilist.command(name="logout", description="Unlink your AniList account from the bot.")
+    async def al_logout(self, interaction: discord.Interaction):
+        await data_manager.remove_user_data(interaction.user.id, "anilist_token")
+        await interaction.response.send_message("👋 Your AniList account has been unlinked.", ephemeral=True)
 
     def clean_html(self, text):
         if not text:
-            return "No description available."
+            return "*No description available.*"
         import re
         text = re.sub(r'<br\s*/?>', '\n', text)
         text = re.sub(r'<[^>]+>', '', text)
-        if len(text) > 500:
-            return text[:497] + "..."
+        if len(text) > 250:
+            return text[:247] + "..."
         return text
 
     async def _handle_media_search(self, interaction: discord.Interaction, query: str, media_type: str):
@@ -181,50 +200,55 @@ class AniList(commands.Cog):
         title_romaji = media["title"]["romaji"]
         url = f"https://anilist.co/{media_type.lower()}/{media['id']}"
         
-        embed = discord.Embed(title=title_en, url=url, color=discord.Color.blue())
+        embed = discord.Embed(
+            title=f"{title_en}",
+            url=url,
+            color=0x02a9ff if media_type == "ANIME" else 0xe85d75
+        )
+        
         if media["coverImage"]["large"]:
-            embed.set_thumbnail(url=media["coverImage"]["large"])
+            embed.set_image(url=media["coverImage"]["large"])
             
-        embed.description = self.clean_html(media["description"])
+        desc = self.clean_html(media["description"])
+        embed.description = f"**{title_romaji}**\n\n{desc}"
         
         # Author / Studio
         if media_type == "ANIME":
             studios = [s["name"] for s in media["studios"]["nodes"]]
             if studios:
-                embed.add_field(name="Studio", value=", ".join(studios), inline=True)
+                embed.add_field(name="🎬 Studio", value=", ".join(studios), inline=True)
         else:
-            # Find author/artist in staff
             authors = []
             for edge in media["staff"]["edges"]:
                 role = edge["role"].lower()
                 if "story" in role or "art" in role or "original creator" in role:
                     authors.append(edge["node"]["name"]["full"])
             if authors:
-                embed.add_field(name="Author", value=", ".join(set(authors)), inline=True)
+                embed.add_field(name="✍️ Author", value=", ".join(set(authors)), inline=True)
 
         # Format & Eps/Chapters
         fmt = media.get("format", "Unknown").replace("_", " ") if media.get("format") else "Unknown"
         length = f"{media.get('episodes', '?')} Eps" if media_type == "ANIME" else f"{media.get('chapters', '?')} Chp"
-        embed.add_field(name="Format", value=f"{fmt} ({length})", inline=True)
+        embed.add_field(name="📺 Format", value=f"{fmt} ({length})", inline=True)
         
         # Release Date
         sd = media.get("startDate", {})
         date_str = "Unknown"
         if sd.get("year"):
             date_str = f"{sd.get('year')}-{sd.get('month', '01'):02d}-{sd.get('day', '01'):02d}"
-        embed.add_field(name="Release Date", value=date_str, inline=True)
+        embed.add_field(name="🗓️ Release Date", value=date_str, inline=True)
         
         # Score
         score = media.get("averageScore")
-        embed.add_field(name="Average Score", value=f"{score}%" if score else "N/A", inline=True)
+        embed.add_field(name="⭐ Score", value=f"{score}%" if score else "N/A", inline=True)
         
         # Tags (Top 4)
         tags = media.get("tags", [])
         tags = sorted(tags, key=lambda t: t.get("rank", 0), reverse=True)[:4]
         if tags:
-            embed.add_field(name="Tags", value=", ".join(t["name"] for t in tags), inline=False)
+            embed.add_field(name="🏷️ Tags", value=", ".join(t["name"] for t in tags), inline=False)
             
-        # Relations (Source, Prequel, Sequel)
+        # Relations
         relations = []
         for edge in media.get("relations", {}).get("edges", []):
             rel_type = edge["relationType"].replace("_", " ").title()
@@ -232,14 +256,14 @@ class AniList(commands.Cog):
                 rel_title = edge["node"]["title"]["english"] or edge["node"]["title"]["romaji"]
                 relations.append(f"**{rel_type}**: {rel_title}")
         if relations:
-            embed.add_field(name="Relations", value="\n".join(relations[:3]), inline=False)
+            embed.add_field(name="🔗 Relations", value="\n".join(relations[:3]), inline=False)
 
         # User Status
         if media.get("mediaListEntry"):
             entry = media["mediaListEntry"]
             status = entry.get("status", "UNKNOWN").replace("_", " ").title()
             progress = entry.get("progress", 0)
-            embed.add_field(name="Your Status", value=f"{status} - {progress} {length.split()[1].lower()}", inline=False)
+            embed.add_field(name="👤 Your Status", value=f"**{status}** - {progress} {length.split()[1].lower()}", inline=False)
 
         await interaction.followup.send(embed=embed)
 
@@ -268,27 +292,25 @@ class AniList(commands.Cog):
         char = data["Character"]
         url = f"https://anilist.co/character/{char['id']}"
         
-        embed = discord.Embed(url=url, color=discord.Color.green())
+        embed = discord.Embed(url=url, color=0x66cda8)
         
         # Names
         name = char["name"]
         en_name = name.get("full") or name.get("userPreferred") or "Unknown"
         jp_name = name.get("native") or ""
-        embed.title = f"{en_name} {f'({jp_name})' if jp_name else ''}"
+        embed.title = f"👤 {en_name} {f'({jp_name})' if jp_name else ''}"
         
         if char["image"]["large"]:
-            embed.set_thumbnail(url=char["image"]["large"])
+            embed.set_image(url=char["image"]["large"])
             
         embed.description = self.clean_html(char["description"])
         
-        embed.add_field(name="Gender", value=char.get("gender") or "Unknown", inline=True)
+        embed.add_field(name="🚻 Gender", value=char.get("gender") or "Unknown", inline=True)
         
-        # Height/Age (using age since height isn't always distinct in GraphQL easily, but let's check if age contains height or if we can find height)
-        # Actually in AniList 'age' often contains height or other stats.
         if char.get("age"):
-            embed.add_field(name="Age/Height", value=char.get("age")[:100], inline=True)
+            embed.add_field(name="🎂 Age/Height", value=char.get("age")[:100], inline=True)
             
-        embed.add_field(name="Favourites", value=str(char.get("favourites", 0)), inline=True)
+        embed.add_field(name="❤️ Favourites", value=f"{char.get('favourites', 0):,}", inline=True)
         
         await interaction.followup.send(embed=embed)
         
@@ -309,21 +331,21 @@ class AniList(commands.Cog):
         staff = data["Staff"]
         url = f"https://anilist.co/staff/{staff['id']}"
         
-        embed = discord.Embed(url=url, color=discord.Color.purple())
+        embed = discord.Embed(url=url, color=0xb47bde)
         
         # Names
         name = staff["name"]
         en_name = name.get("full") or name.get("userPreferred") or "Unknown"
         jp_name = name.get("native") or ""
-        embed.title = f"{en_name} {f'({jp_name})' if jp_name else ''}"
+        embed.title = f"🎭 {en_name} {f'({jp_name})' if jp_name else ''}"
         
         if staff["image"]["large"]:
-            embed.set_thumbnail(url=staff["image"]["large"])
+            embed.set_image(url=staff["image"]["large"])
             
         embed.description = self.clean_html(staff["description"])
         
-        embed.add_field(name="Gender", value=staff.get("gender") or "Unknown", inline=True)
-        embed.add_field(name="Favourites", value=str(staff.get("favourites", 0)), inline=True)
+        embed.add_field(name="🚻 Gender", value=staff.get("gender") or "Unknown", inline=True)
+        embed.add_field(name="❤️ Favourites", value=f"{staff.get('favourites', 0):,}", inline=True)
         
         await interaction.followup.send(embed=embed)
 

@@ -46,7 +46,7 @@ class YuuriBot(commands.Bot):
         
         # Start OAuth Web Server
         try:
-            await start_web_server()
+            await start_web_server(self)
         except Exception as e:
             print(f"Failed to start web server: {e}")
 
