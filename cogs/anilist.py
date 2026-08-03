@@ -144,7 +144,6 @@ query ($id: Int, $name: String) {
   User(id: $id, name: $name) {
     id
     name
-    about(asHtml: false)
     avatar { large }
     siteUrl
     updatedAt
@@ -170,7 +169,6 @@ query {
   Viewer {
     id
     name
-    about(asHtml: false)
     avatar { large }
     siteUrl
     updatedAt
@@ -527,10 +525,6 @@ class AniList(commands.Cog):
         embed = discord.Embed(title=user["name"], url=url, color=0x3db4f2)
         
         embed.set_image(url=f"https://img.anili.st/user/{user['id']}")
-            
-        desc = self.clean_html(user.get("about"))
-        if desc and desc != "*No description available.*":
-            embed.description = desc
             
         stats = user.get("statistics", {})
         anime_stats = stats.get("anime", {})
