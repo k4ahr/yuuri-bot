@@ -7,23 +7,6 @@ import re
 import random
 import uuid
 
-def remove_vietnamese_accents(s: str) -> str:
-    s = re.sub(r'[àáạảãâầấậẩẫăằắặẳẵ]', 'a', s)
-    s = re.sub(r'[ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴ]', 'A', s)
-    s = re.sub(r'[èéẹẻẽêềếệểễ]', 'e', s)
-    s = re.sub(r'[ÈÉẸẺẼÊỀẾỆỂỄ]', 'E', s)
-    s = re.sub(r'[òóọỏõôồốộổỗơờớợởỡ]', 'o', s)
-    s = re.sub(r'[ÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠ]', 'O', s)
-    s = re.sub(r'[ìíịỉĩ]', 'i', s)
-    s = re.sub(r'[ÌÍỊỈĨ]', 'I', s)
-    s = re.sub(r'[ùúụủũưừứựửữ]', 'u', s)
-    s = re.sub(r'[ÙÚỤỦŨƯỪỨỰỬỮ]', 'U', s)
-    s = re.sub(r'[ỳýỵỷỹ]', 'y', s)
-    s = re.sub(r'[ỲÝỴỶỸ]', 'Y', s)
-    s = re.sub(r'[Đ]', 'D', s)
-    s = re.sub(r'[đ]', 'd', s)
-    return s
-
 class TriggerPaginationView(discord.ui.View):
     def __init__(self, embeds: list[discord.Embed]):
         super().__init__(timeout=180)
@@ -186,13 +169,13 @@ class Trigger(commands.GroupCog, group_name="trigger"):
         triggers, _ = self.migrate_triggers_if_needed(triggers)
 
         # Normalize message content
-        content_normalized = remove_vietnamese_accents(message.content).lower()
+        content_normalized = message.content.lower()
         
         for t_id, data in triggers.items():
             words = data.get("words", [])
             matched = False
             for word in words:
-                word_normalized = remove_vietnamese_accents(word).lower()
+                word_normalized = word.lower()
                 escaped_word = re.escape(word_normalized)
                 pattern = r'\b' + escaped_word + r'\b'
                 if re.search(pattern, content_normalized):
