@@ -31,6 +31,88 @@ class TriggerPaginationView(discord.ui.View):
         await interaction.response.edit_message(embed=self.embeds[self.current_page], view=self)
 
 
+class TriggerAddModal(discord.ui.Modal, title='Add New Trigger'):
+    words = discord.ui.TextInput(
+        label='Trigger Words (comma separated)',
+        style=discord.TextStyle.short,
+        placeholder='Enter words separated by commas.',
+        required=True
+    )
+    responses = discord.ui.TextInput(
+        label='Responses (one per line)',
+        style=discord.TextStyle.paragraph,
+        placeholder='Enter responses, one per line. Paste Image URLs directly.',
+        required=True
+    )
+    whitelist = discord.ui.TextInput(
+        label='Whitelist (Optional)',
+        style=discord.TextStyle.short,
+        placeholder='Optional: @User or @Role or IDs, comma separated.',
+        required=False
+    )
+    blacklist = discord.ui.TextInput(
+        label='Blacklist (Optional)',
+        style=discord.TextStyle.short,
+        placeholder='Optional: @User or @Role or IDs, comma separated.',
+        required=False
+    )
+
+    def __init__(self, cog, reply: bool):
+        super().__init__()
+        self.cog = cog
+        self.reply = reply
+
+    async def on_submit(self, interaction: discord.Interaction):
+        config = await data_manager.get_server_config(interaction.guild_id)
+        triggers = config.get("triggers", {})
+        
+        triggers, migrated = self.cog.migrate_triggers_if_needed(triggers)
+        
+        # Parse inputs
+        words_list = [w.strip().lower() for w in self.words.value.split(',') if w.strip()]
+        responses_list = [r.strip() for r in self.responses.value.split('\n') if r.strip()]
+        
+        # Helper to extract IDs
+        def extract_ids(text):
+            if not text:
+                return []
+            return re.findall(r'\d{15,20}', text)
+
+        whitelist_ids = extract_ids(self.whitelist.value)
+        blacklist_ids = extract_ids(self.blacklist.value)
+        
+        if not words_list:
+            return await interaction.response.send_message("You must provide at least one trigger word.", ephemeral=True)
+            
+        if not responses_list:
+            return await interaction.response.send_message("You must provide at least one response.", ephemeral=True)
+            
+        trigger_id = str(uuid.uuid4())
+        triggers[trigger_id] = {
+            "words": words_list,
+            "responses": responses_list,
+            "reply": self.reply
+        }
+        if whitelist_ids:
+            triggers[trigger_id]["whitelist"] = whitelist_ids
+        if blacklist_ids:
+            triggers[trigger_id]["blacklist"] = blacklist_ids
+            
+        await data_manager.set_server_config(interaction.guild_id, "triggers", triggers)
+        
+        reply_text = "Yes" if self.reply else "No"
+        words_str = ", ".join([f"`{w}`" for w in words_list])
+        
+        msg = f"Added trigger for {words_str} => {len(responses_list)} response(s). (Reply: {reply_text})"
+        if whitelist_ids:
+            msg += f"\n**Whitelist:** {len(whitelist_ids)} entries"
+        if blacklist_ids:
+            msg += f"\n**Blacklist:** {len(blacklist_ids)} entries"
+            
+        await interaction.response.send_message(msg, ephemeral=True)
+
+
+
 class Trigger(commands.GroupCog, group_name="trigger"):
     def __init__(self, bot):
         self.bot = bot
@@ -60,38 +142,11 @@ class Trigger(commands.GroupCog, group_name="trigger"):
         return new_triggers, migrated
 
     @app_commands.command(name="add", description="Add a new auto-reply trigger for the server.")
-    @app_commands.describe(
-        word1="Trigger word 1", response1="Response 1", reply="True to reply to the user, False to send in channel.",
-        word2="Trigger word 2", word3="Trigger word 3", word4="Trigger word 4", word5="Trigger word 5",
-        response2="Response 2", response3="Response 3", response4="Response 4", response5="Response 5"
-    )
+    @app_commands.describe(reply="True to reply to the user, False to send in channel.")
     @app_commands.check(is_admin_or_role)
-    async def trigger_add(
-        self, interaction: discord.Interaction, reply: bool,
-        word1: str, response1: str,
-        word2: str = None, word3: str = None, word4: str = None, word5: str = None,
-        response2: str = None, response3: str = None, response4: str = None, response5: str = None
-    ):
-        config = await data_manager.get_server_config(interaction.guild_id)
-        triggers = config.get("triggers", {})
-        
-        triggers, migrated = self.migrate_triggers_if_needed(triggers)
-        
-        words = [w.lower() for w in [word1, word2, word3, word4, word5] if w]
-        responses = [r for r in [response1, response2, response3, response4, response5] if r]
-        
-        trigger_id = str(uuid.uuid4())
-        triggers[trigger_id] = {
-            "words": words,
-            "responses": responses,
-            "reply": reply
-        }
-        
-        await data_manager.set_server_config(interaction.guild_id, "triggers", triggers)
-        reply_text = "Yes" if reply else "No"
-        
-        words_str = ", ".join([f"`{w}`" for w in words])
-        await interaction.response.send_message(f"Added trigger for {words_str} => {len(responses)} response(s). (Reply: {reply_text})", ephemeral=True)
+    async def trigger_add(self, interaction: discord.Interaction, reply: bool):
+        modal = TriggerAddModal(self, reply)
+        await interaction.response.send_modal(modal)
 
     @app_commands.command(name="remove", description="Remove an auto-reply trigger by providing any of its trigger words.")
     @app_commands.describe(word="A trigger word to remove the entire associated trigger group.")
@@ -172,6 +227,18 @@ class Trigger(commands.GroupCog, group_name="trigger"):
         content_normalized = message.content.lower()
         
         for t_id, data in triggers.items():
+            whitelist = data.get("whitelist", [])
+            blacklist = data.get("blacklist", [])
+            
+            if whitelist or blacklist:
+                author_ids = [str(message.author.id)] + [str(role.id) for role in getattr(message.author, 'roles', [])]
+                
+                if whitelist and not any(w_id in author_ids for w_id in whitelist):
+                    continue
+                    
+                if blacklist and any(b_id in author_ids for b_id in blacklist):
+                    continue
+
             words = data.get("words", [])
             matched = False
             for word in words:
