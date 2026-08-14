@@ -113,7 +113,7 @@ class TriggerAddModal(discord.ui.Modal, title='Add New Trigger'):
 
 
 
-class Trigger(commands.GroupCog, group_name="trigger"):
+class Trigger(commands.GroupCog, group_name="trigger", group_description="Manage auto-reply triggers."):
     def __init__(self, bot):
         self.bot = bot
         super().__init__()
