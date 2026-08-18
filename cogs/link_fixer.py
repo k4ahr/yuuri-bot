@@ -24,7 +24,7 @@ PLATFORM_MAP = {
     },
     'facebook': {
         'domains': ['facebook.com', 'www.facebook.com', 'fb.watch', 'www.fb.watch'],
-        'replace': 'facebed.com'
+        'replace': 'fb.komari.site'
     },
     'pixiv': {
         'domains': ['pixiv.net', 'www.pixiv.net'],
