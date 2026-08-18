@@ -29,10 +29,18 @@ PLATFORM_MAP = {
     'pixiv': {
         'domains': ['pixiv.net', 'www.pixiv.net'],
         'replace': 'phixiv.net'
+    },
+    'reddit': {
+        'domains': ['reddit.com', 'www.reddit.com', 'old.reddit.com'],
+        'replace': 'vxreddit.com'
+    },
+    'threads': {
+        'domains': ['threads.net', 'www.threads.net', 'threads.com', 'www.threads.com'],
+        'replace': 'vxthreads.com'
     }
 }
 
-NORMAL_PLATFORMS = ['twitter', 'tiktok', 'instagram', 'pixiv', 'anilist']
+NORMAL_PLATFORMS = ['twitter', 'tiktok', 'instagram', 'pixiv', 'anilist', 'reddit', 'threads']
 EXPERIMENTAL_PLATFORMS = ['facebook']
 
 class EmbedConfigView(discord.ui.View):
