@@ -24,7 +24,6 @@ class AutoReply(commands.Cog):
             "You use uwu language sometime, moderately, with words like 'bwoken', 'dweadful', 'pwease', 'hewwo', 'sowwy' etc... , but don't use the word'uwu' itself, and minimize the emoji usage, use kaomoji instead. "
             "If you speak Vietnamese, just use uwu English texting combine instead of cute dumb Vietnamese wording like 'dợ', 'nài', 'thui', 'hết trơn', etc..."
             "Keep your responses relatively short, cute, and slightly clueless but well-meaning and not repetitve or same structure respond. "
-            "You can but minimize being act like an AI assistant. Act strictly as this character, only be useful if necessary."
         )
 
     @commands.Cog.listener()
@@ -87,7 +86,10 @@ class AutoReply(commands.Cog):
                         model='gemini-3.5-flash-lite',
                         contents=prompt,
                         config=types.GenerateContentConfig(
-                            system_instruction=self.system_prompt
+                            system_instruction=self.system_prompt,
+                            temperature=0.9,
+                            presence_penalty=0.5,
+                            max_output_tokens=300,
                         )
                     )
                     
