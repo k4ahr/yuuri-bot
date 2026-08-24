@@ -1,11 +1,30 @@
 import discord
 from discord.ext import commands
-import random
-from core.data_manager import data_manager
+import os
+from google import genai
+import time
+import asyncio
 
 class AutoReply(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
+        self.cooldowns = {}
+        
+        # Initialize Gemini API
+        api_key = os.getenv("GEMINI_API_KEY")
+        if api_key:
+            self.client = genai.Client(api_key=api_key)
+        else:
+            self.client = None
+            print("WARNING: GEMINI_API_KEY not found. AI mention feature is disabled.")
+
+        self.system_prompt = (
+            "You are a cute, airheaded, and dumb anime girl discord bot named Yuuri from the anime Girls Last Tour. "
+            "Your sister name is Chito, you don't like to study, you love eating and playing outside. "
+            "You use uwu language sometime, moderately, with words like 'bwoken', 'dweadful', 'pwease', 'hewwo', 'sowwy' etc. "
+            "Keep your responses relatively short, cute, and slightly clueless but well-meaning. "
+            "Do not act like an AI assistant. Act strictly as this character."
+        )
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -14,11 +33,54 @@ class AutoReply(commands.Cog):
 
         # Check if the bot is mentioned
         if self.bot.user in message.mentions:
-            config = await data_manager.get_server_config(message.guild.id)
-            responses = config.get("mention_responses", [])
-            if responses:
-                reply = random.choice(responses)
-                await message.reply(reply)
+            if not self.client:
+                await message.reply("My bwain is missing its API key... I can't thwink wight now, pwease tell master to check the .env file~")
+                return
+
+            user_id = message.author.id
+            current_time = time.time()
+            
+            # Check 15-second cooldown
+            if user_id in self.cooldowns:
+                if current_time - self.cooldowns[user_id] < 15:
+                    return
+            
+            self.cooldowns[user_id] = current_time
+
+            async with message.channel.typing():
+                try:
+                    # Fetch last 50 messages for context
+                    history = [msg async for msg in message.channel.history(limit=50, before=message)]
+                    history.reverse() # Oldest to newest
+                    
+                    conversation = []
+                    for msg in history:
+                        if not msg.content:
+                            continue
+                        user_name = "Yuuri" if msg.author.id == self.bot.user.id else msg.author.display_name
+                        conversation.append(f"{user_name}: {msg.clean_content}")
+                        
+                    conversation.append(f"{message.author.display_name}: {message.clean_content}")
+                    
+                    context_text = "\n".join(conversation[-50:])
+                    
+                    prompt = f"{self.system_prompt}\n\nHere is the recent chat history:\n{context_text}\n\nYuuri:"
+                    
+                    # Run generation in executor to not block async loop
+                    response = await asyncio.to_thread(
+                        self.client.models.generate_content,
+                        model='gemini-3.6-flash',
+                        contents=prompt,
+                    )
+                    
+                    if response.text:
+                        await message.reply(response.text)
+                    else:
+                        await message.reply("My bwain went empty... wha did you say? uwu")
+                except Exception as e:
+                    print(f"Error generating AI reply: {e}")
+                    await message.reply("Oh noes... something dweadful happened to my bwain... I can't weply right now! T^T")
 
 async def setup(bot):
     await bot.add_cog(AutoReply(bot))
+
