@@ -88,7 +88,6 @@ class AutoReply(commands.Cog):
                         config=types.GenerateContentConfig(
                             system_instruction=self.system_prompt,
                             temperature=0.9,
-                            presence_penalty=0.5,
                             max_output_tokens=300,
                         )
                     )
