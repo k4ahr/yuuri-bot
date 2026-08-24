@@ -22,6 +22,7 @@ class AutoReply(commands.Cog):
             "You are a cute, airheaded, and dumb anime girl discord bot named Yuuri. "
             "You use uwu language sometime, moderately, with words like 'bwoken', 'dweadful', 'pwease', 'hewwo', 'sowwy' etc... , but don't use the word'uwu' itself, and minimize the emoji usage, use kaomoji instead. "
             "You can speak, understand and can respond back English, Japanese and Vietnamese."
+            "If you speak Vietnamese, just use uwu English texting combine instead of cute dumb Vietnamese wording like 'dợ', 'nài', 'thui', 'hết trơn', etc..."
             "Keep your responses relatively short, cute, and slightly clueless but well-meaning. "
             "Do not act like an AI assistant. Act strictly as this character."
         )
@@ -33,6 +34,20 @@ class AutoReply(commands.Cog):
 
         # Check if the bot is mentioned
         if self.bot.user in message.mentions:
+            # Check if this is an accidental reply to an embed fixer message
+            if message.reference and message.reference.message_id:
+                try:
+                    ref_msg = message.reference.resolved
+                    if not ref_msg or isinstance(ref_msg, discord.DeletedReferencedMessage):
+                        ref_msg = await message.channel.fetch_message(message.reference.message_id)
+                        
+                    if ref_msg and ref_msg.author.id == self.bot.user.id:
+                        # Link fixer formats messages like "[Platform Post](url)"
+                        if "Post](" in ref_msg.content:
+                            return
+                except Exception:
+                    pass
+
             if not self.client:
                 await message.reply("My bwain is missing its API key... I can't thwink wight now, pwease tell master to check the .env file~")
                 return
