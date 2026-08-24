@@ -9,15 +9,15 @@ class Ping(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="ping", description="Replies with Pong and network statistics!")
-    async def ping_command(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+    @commands.hybrid_command(name="ping", description="Replies with Pong and network statistics!")
+    async def ping_command(self, ctx: commands.Context):
+        await ctx.defer()
         
         # Calculate API latency (WebSocket ping)
         api_latency = round(self.bot.latency * 1000)
         
         # Calculate interaction response time
-        response_time = round((discord.utils.utcnow() - interaction.created_at).total_seconds() * 1000)
+        response_time = round((discord.utils.utcnow() - ctx.message.created_at).total_seconds() * 1000)
 
         # AniList API ping
         al_start = time.perf_counter()
@@ -49,9 +49,9 @@ class Ping(commands.Cog):
             embed.set_image(url="attachment://ping.gif")
 
         if file:
-            await interaction.followup.send(embed=embed, file=file)
+            await ctx.send(embed=embed, file=file)
         else:
-            await interaction.followup.send(embed=embed)
+            await ctx.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Ping(bot))

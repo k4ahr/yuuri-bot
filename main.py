@@ -22,11 +22,17 @@ class YuuriBot(commands.Bot):
         intents.message_content = True
         
         super().__init__(
-            command_prefix="!",
+            command_prefix="y!",
             intents=intents,
+            case_insensitive=True,
             help_command=None # Removed default help command
         )
         self.quotes = load_quotes()
+
+        @self.before_invoke
+        async def before_any_command(ctx):
+            if ctx.interaction is None:
+                await ctx.typing()
 
     async def setup_hook(self):
         self.change_status.start()

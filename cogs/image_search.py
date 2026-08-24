@@ -8,10 +8,10 @@ class ImageSearch(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="safebooru", description="Searches safebooru.org for images based on tags.")
+    @commands.hybrid_command(name="safebooru", description="Searches safebooru.org for images based on tags.")
     @app_commands.describe(tags="Tags to search for (space-separated).")
-    async def safebooru_search(self, interaction: discord.Interaction, tags: str = ""):
-        await interaction.response.defer()
+    async def safebooru_search(self, ctx: commands.Context, tags: str = ""):
+        await ctx.defer()
         
         formatted_tags = tags.replace(" ", "+")
         url = f"https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&tags={formatted_tags}&limit=100"
@@ -20,17 +20,17 @@ class ImageSearch(commands.Cog):
             try:
                 async with session.get(url) as resp:
                     if resp.status != 200:
-                        await interaction.followup.send("Failed to fetch images from safebooru.")
+                        await ctx.send("Failed to fetch images from safebooru.")
                         return
                     
                     try:
                         data = await resp.json(content_type=None)
                     except:
-                        await interaction.followup.send("Invalid response from Safebooru.")
+                        await ctx.send("Invalid response from Safebooru.")
                         return
                     
                     if not data:
-                        await interaction.followup.send(f"No images found for tags: `{tags}`")
+                        await ctx.send(f"No images found for tags: `{tags}`")
                         return
                         
                     image = random.choice(data)
@@ -46,28 +46,28 @@ class ImageSearch(commands.Cog):
                         
                     embed.set_footer(text=f"Score: {image.get('score', 0)} | Tags: {img_tags}")
                     
-                    await interaction.followup.send(embed=embed)
+                    await ctx.send(embed=embed)
             except Exception as e:
-                await interaction.followup.send(f"An error occurred while fetching image: {e}")
+                await ctx.send(f"An error occurred while fetching image: {e}")
 
-    @app_commands.command(name="danbooru", description="Searches danbooru.donmai.us for images (Supporter only, NSFW channels only).")
+    @commands.hybrid_command(name="danbooru", description="Searches danbooru.donmai.us for images (Supporter only, NSFW channels only).")
     @app_commands.describe(tags="Tags to search for (space-separated, max 2 tags).")
-    async def danbooru_search(self, interaction: discord.Interaction, tags: str = ""):
+    async def danbooru_search(self, ctx: commands.Context, tags: str = ""):
         # Check NSFW channel
-        if not getattr(interaction.channel, 'is_nsfw', lambda: False)():
-            return await interaction.response.send_message("❌ This command can only be used in **NSFW** channels.", ephemeral=True)
+        if not getattr(ctx.channel, 'is_nsfw', lambda: False)():
+            return await ctx.send("❌ This command can only be used in **NSFW** channels.", ephemeral=True)
             
         # Check supporter or admin
         from cogs.admin import is_supporter_or_admin
-        if not await is_supporter_or_admin(interaction):
+        if not await is_supporter_or_admin(ctx):
             return
             
-        await interaction.response.defer()
+        await ctx.defer()
         
         # Danbooru allows maximum 2 tags for anonymous users
         tag_list = tags.split()
         if len(tag_list) > 2:
-            return await interaction.followup.send("❌ Danbooru only allows searching up to 2 tags at a time.")
+            return await ctx.send("❌ Danbooru only allows searching up to 2 tags at a time.")
             
         formatted_tags = "+".join(tag_list)
         url = f"https://danbooru.donmai.us/posts.json?tags={formatted_tags}&limit=100"
@@ -77,17 +77,17 @@ class ImageSearch(commands.Cog):
                 headers = {"User-Agent": "YuuriBot/1.0 (by discord user)"}
                 async with session.get(url, headers=headers) as resp:
                     if resp.status != 200:
-                        return await interaction.followup.send("❌ Failed to fetch images from Danbooru.")
+                        return await ctx.send("❌ Failed to fetch images from Danbooru.")
                     
                     try:
                         data = await resp.json(content_type=None)
                     except:
-                        return await interaction.followup.send("❌ Invalid response from Danbooru.")
+                        return await ctx.send("❌ Invalid response from Danbooru.")
                     
                     valid_images = [img for img in data if 'file_url' in img]
                     
                     if not valid_images:
-                        return await interaction.followup.send(f"❌ No images found for tags: `{tags}`")
+                        return await ctx.send(f"❌ No images found for tags: `{tags}`")
                         
                     image = random.choice(valid_images)
                     image_url = image['file_url']
@@ -102,9 +102,9 @@ class ImageSearch(commands.Cog):
                         
                     embed.set_footer(text=f"Score: {image.get('score', 0)} | Tags: {img_tags}")
                     
-                    await interaction.followup.send(embed=embed)
+                    await ctx.send(embed=embed)
             except Exception as e:
-                await interaction.followup.send(f"❌ An error occurred while fetching image: {e}")
+                await ctx.send(f"❌ An error occurred while fetching image: {e}")
 
 async def setup(bot):
     await bot.add_cog(ImageSearch(bot))

@@ -8,19 +8,19 @@ class Honeypot(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="sethoneypot", description="Sets the honeypot channel for this server.")
+    @commands.hybrid_command(name="sethoneypot", description="Sets the honeypot channel for this server.")
     @app_commands.describe(channel="The honeypot text channel.")
-    @app_commands.check(is_admin_or_role)
-    async def set_honeypot(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        await data_manager.set_server_config(interaction.guild_id, "honeypot_channel", channel.id)
-        await interaction.response.send_message(f"Honeypot channel set to {channel.mention}. Anyone who posts there will be banned.", ephemeral=True)
+    @commands.check(is_admin_or_role)
+    async def set_honeypot(self, ctx: commands.Context, channel: discord.TextChannel):
+        await data_manager.set_server_config(ctx.guild.id, "honeypot_channel", channel.id)
+        await ctx.send(f"Honeypot channel set to {channel.mention}. Anyone who posts there will be banned.", ephemeral=True)
 
-    @app_commands.command(name="sethoneypotdm", description="Sets the DM message sent to users when they trigger the honeypot.")
+    @commands.hybrid_command(name="sethoneypotdm", description="Sets the DM message sent to users when they trigger the honeypot.")
     @app_commands.describe(message="The message to DM the user.")
-    @app_commands.check(is_admin_or_role)
-    async def set_honeypotdm(self, interaction: discord.Interaction, message: str):
-        await data_manager.set_server_config(interaction.guild_id, "honeypot_dm", message)
-        await interaction.response.send_message(f"Honeypot DM set to: `{message}`", ephemeral=True)
+    @commands.check(is_admin_or_role)
+    async def set_honeypotdm(self, ctx: commands.Context, message: str):
+        await data_manager.set_server_config(ctx.guild.id, "honeypot_dm", message)
+        await ctx.send(f"Honeypot DM set to: `{message}`", ephemeral=True)
 
     @commands.Cog.listener()
     async def on_message(self, message):

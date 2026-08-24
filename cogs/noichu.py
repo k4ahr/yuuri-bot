@@ -66,37 +66,37 @@ class Noichu(commands.Cog):
         player_data["score"] += points_earned
         return points_earned, multiplier
 
-    @app_commands.command(name="setnoichu", description="Sets the active word chain channel for the server.")
+    @commands.hybrid_command(name="setnoichu", description="Sets the active word chain channel for the server.")
     @app_commands.describe(channel="The channel for the game.")
-    @app_commands.check(is_admin_or_role)
-    async def set_noichu(self, interaction: discord.Interaction, channel: discord.TextChannel = None):
-        target_channel = channel or interaction.channel
-        state = await data_manager.get_noichu_state(interaction.guild_id)
+    @commands.check(is_admin_or_role)
+    async def set_noichu(self, ctx: commands.Context, channel: discord.TextChannel = None):
+        target_channel = channel or ctx.channel
+        state = await data_manager.get_noichu_state(ctx.guild.id)
         state["channel_id"] = target_channel.id
         state["last_word"] = None
         state["used_words_list"] = []
         state["last_author_id"] = None
-        await data_manager.save_noichu_state(interaction.guild_id, state)
-        await interaction.response.send_message(f"✅ Đã set kênh chơi nối chữ tại {target_channel.mention}. Game đã được reset!")
+        await data_manager.save_noichu_state(ctx.guild.id, state)
+        await ctx.send(f"✅ Đã set kênh chơi nối chữ tại {target_channel.mention}. Game đã được reset!")
 
-    @app_commands.command(name="ncreset", description="Resets the word chain game data for the server.")
-    @app_commands.check(is_admin_or_role)
-    async def ncreset(self, interaction: discord.Interaction):
-        state = await data_manager.get_noichu_state(interaction.guild_id)
+    @commands.hybrid_command(name="ncreset", description="Resets the word chain game data for the server.")
+    @commands.check(is_admin_or_role)
+    async def ncreset(self, ctx: commands.Context):
+        state = await data_manager.get_noichu_state(ctx.guild.id)
         state["last_word"] = None
         state["used_words_list"] = []
         state["last_author_id"] = None
-        await data_manager.save_noichu_state(interaction.guild_id, state)
-        await interaction.response.send_message("✅ Game nối chữ đã được reset!")
+        await data_manager.save_noichu_state(ctx.guild.id, state)
+        await ctx.send("✅ Game nối chữ đã được reset!")
 
-    @app_commands.command(name="nclb", description="Shows the Top 10 leaderboard for the word chain game.")
-    async def nclb(self, interaction: discord.Interaction):
-        state = await data_manager.get_noichu_state(interaction.guild_id)
+    @commands.hybrid_command(name="nclb", description="Shows the Top 10 leaderboard for the word chain game.")
+    async def nclb(self, ctx: commands.Context):
+        state = await data_manager.get_noichu_state(ctx.guild.id)
         lb_list = [v for k, v in state["leaderboard"].items()]
         lb_list.sort(key=lambda x: x["score"], reverse=True)
         
         if not lb_list: 
-            return await interaction.response.send_message("📉 Chưa có dữ liệu bảng xếp hạng nối chữ!")
+            return await ctx.send("📉 Chưa có dữ liệu bảng xếp hạng nối chữ!")
 
         top_10 = lb_list[:10]
         embed = discord.Embed(title="🏆 Bảng Xếp Hạng Noichu", color=discord.Color.gold())
@@ -111,18 +111,18 @@ class Noichu(commands.Cog):
             
         embed.description = desc
         embed.set_footer(text=f"Top 10 / Tổng {len(lb_list)} người chơi")
-        await interaction.response.send_message(embed=embed)
+        await ctx.send(embed=embed)
 
-    @app_commands.command(name="ncrank", description="Shows word chain game rank and stats for a specific user.")
+    @commands.hybrid_command(name="ncrank", description="Shows word chain game rank and stats for a specific user.")
     @app_commands.describe(member="The user to check.")
-    async def ncrank(self, interaction: discord.Interaction, member: discord.Member = None):
-        target = member or interaction.user
+    async def ncrank(self, ctx: commands.Context, member: discord.Member = None):
+        target = member or ctx.author
         uid = str(target.id)
-        state = await data_manager.get_noichu_state(interaction.guild_id)
+        state = await data_manager.get_noichu_state(ctx.guild.id)
         lb_data = state["leaderboard"]
 
         if uid not in lb_data:
-            return await interaction.response.send_message(f"📉 **{target.display_name}** chưa có trong bảng xếp hạng. Hãy chơi game để kiếm điểm!")
+            return await ctx.send(f"📉 **{target.display_name}** chưa có trong bảng xếp hạng. Hãy chơi game để kiếm điểm!")
 
         sorted_lb = sorted(lb_data.items(), key=lambda x: x[1]['score'], reverse=True)
         
@@ -141,31 +141,31 @@ class Noichu(commands.Cog):
         embed.add_field(name="✨ Điểm số", value=f"{score}", inline=True)
         embed.add_field(name="🔥 Chuỗi thắng", value=f"{streak} (Hệ số: {multiplier})", inline=False)
             
-        await interaction.response.send_message(embed=embed)
+        await ctx.send(embed=embed)
 
-    @app_commands.command(name="nccount", description="Displays total game stats for the current server.")
-    async def nccount(self, interaction: discord.Interaction):
-        state = await data_manager.get_noichu_state(interaction.guild_id)
+    @commands.hybrid_command(name="nccount", description="Displays total game stats for the current server.")
+    async def nccount(self, ctx: commands.Context):
+        state = await data_manager.get_noichu_state(ctx.guild.id)
         count = len(state["used_words_list"])
         last = state["last_word"] or "None"
-        await interaction.response.send_message(embed=discord.Embed(title="📊 Thống kê Game Nối Chữ", description=f"**Số từ đã nối:** {count}\n**Từ cuối cùng:** {last}", color=discord.Color.gold()))
+        await ctx.send(embed=discord.Embed(title="📊 Thống kê Game Nối Chữ", description=f"**Số từ đã nối:** {count}\n**Từ cuối cùng:** {last}", color=discord.Color.gold()))
 
-    @app_commands.command(name="ncdefine", description="Looks up the definition of the current or specified word.")
+    @commands.hybrid_command(name="define", description="Looks up the definition of the current or specified word.")
     @app_commands.describe(word="The word to look up. Leaves blank for the last word.")
-    async def ncdefine(self, interaction: discord.Interaction, word: str = None):
-        await interaction.response.defer()
-        state = await data_manager.get_noichu_state(interaction.guild_id)
+    async def define(self, ctx: commands.Context, word: str = None):
+        await ctx.defer()
+        state = await data_manager.get_noichu_state(ctx.guild.id)
         target_word = word or state['last_word']
         
         if not target_word:
-            return await interaction.followup.send("❌ Không có từ để định nghĩa!")
+            return await ctx.send("❌ Không có từ để định nghĩa!")
 
         res = await self.get_word_definition(target_word)
         if not res: 
-            return await interaction.followup.send(f"❌ Chịu, không tìm thấy nghĩa của từ **'{target_word}'**.")
+            return await ctx.send(f"❌ Chịu, không tìm thấy nghĩa của từ **'{target_word}'**.")
 
         embed = discord.Embed(title=f"📖 Định nghĩa: {res['word'].capitalize()}", description="\n".join(res['meanings'][:3]) if res['meanings'] else "N/A", color=discord.Color.blue())
-        await interaction.followup.send(embed=embed)
+        await ctx.send(embed=embed)
 
     @commands.Cog.listener()
     async def on_message(self, msg):

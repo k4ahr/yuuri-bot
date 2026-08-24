@@ -141,15 +141,15 @@ class LinkFixer(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="embedconfig", description="Configure the Auto Link Fixer.")
-    @app_commands.check(is_admin_or_role)
-    async def embedconfig(self, interaction: discord.Interaction):
-        server_config = await data_manager.get_server_config(interaction.guild_id)
+    @commands.hybrid_command(name="embedconfig", description="Configure the Auto Link Fixer.")
+    @commands.check(is_admin_or_role)
+    async def embedconfig(self, ctx: commands.Context):
+        server_config = await data_manager.get_server_config(ctx.guild.id)
         config = server_config.get("embed_fixer", {})
         
-        view = EmbedConfigView(interaction.guild_id, config)
+        view = EmbedConfigView(ctx.guild.id, config)
         embed = view.create_embed()
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await ctx.send(embed=embed, view=view, ephemeral=True)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):

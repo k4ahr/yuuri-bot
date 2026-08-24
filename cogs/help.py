@@ -4,8 +4,8 @@ from discord.ext import commands
 import os
 
 CATEGORIES = {
-    "Wordchain": ["setnoichu", "ncreset", "nclb", "ncrank", "nccount", "ncdefine"],
-    "AniList": ["anilist"],
+    "Wordchain": ["setnoichu", "ncreset", "nclb", "ncrank", "nccount", "define"],
+    "AniList": ["anilist", "allogin", "allogout", "alprofile", "alsearch", "alanime", "almanga", "alcharacter", "alstaff"],
     "General": ["safebooru", "gas", "help", "ping", "privacy", "whatsnew"],
     "Supporter": ["say", "addresponse", "listresponses", "removeresponse", "danbooru"],
     "Admin": ["rolesconfig", "setlogchannel", "sethoneypot", "sethoneypotdm", "embedconfig", "botstats", "trigger"]
@@ -49,16 +49,22 @@ class HelpView(discord.ui.View):
             color=discord.Color.blurple()
         )
         
-        all_commands = {cmd.name: cmd for cmd in self.bot.tree.get_commands()}
+        all_tree_commands = {cmd.name: cmd for cmd in self.bot.tree.get_commands()}
         cat_commands = CATEGORIES.get(category, [])
         
         count = 0
         for name in cat_commands:
-            cmd = all_commands.get(name)
+            cmd = all_tree_commands.get(name)
             if cmd:
                 desc = cmd.description or "No description provided."
-                embed.add_field(name=f"/{cmd.name}", value=desc, inline=False)
+                embed.add_field(name=cmd.name, value=desc, inline=False)
                 count += 1
+            else:
+                prefix_cmd = self.bot.get_command(name)
+                if prefix_cmd:
+                    desc = prefix_cmd.description or prefix_cmd.help or "No description provided."
+                    embed.add_field(name=prefix_cmd.name, value=desc, inline=False)
+                    count += 1
                 
         if count == 0:
             embed.add_field(name="No commands loaded", value="Commands are either not synced or unavailable right now.", inline=False)
@@ -75,11 +81,11 @@ class Help(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="help", description="Shows a list of available commands categorized with a dropdown.")
-    async def help_command(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+    @commands.hybrid_command(name="help", description="Shows a list of available commands categorized with a dropdown.")
+    async def help_command(self, ctx: commands.Context):
+        await ctx.defer()
         
-        view = HelpView(self.bot, interaction.user.id)
+        view = HelpView(self.bot, ctx.author.id)
         embed = view.generate_embed("General")
         
         image_path = os.path.join("assets", "images", "help_banner.png")
@@ -88,21 +94,21 @@ class Help(commands.Cog):
             file = discord.File(image_path, filename="help_banner.png")
             
         if file:
-            await interaction.followup.send(embed=embed, view=view, file=file)
+            await ctx.send(embed=embed, view=view, file=file)
         else:
-            await interaction.followup.send(embed=embed, view=view)
+            await ctx.send(embed=embed, view=view)
 
-    @app_commands.command(name="privacy", description="See the bot's privacy terms")
-    async def privacy_command(self, interaction: discord.Interaction):
+    @commands.hybrid_command(name="privacy", description="See the bot's privacy terms")
+    async def privacy_command(self, ctx: commands.Context):
         image_path = os.path.join("assets", "images", "privacy.jpg")
         if os.path.exists(image_path):
             file = discord.File(image_path, filename="privacy.jpg")
-            await interaction.response.send_message(file=file)
+            await ctx.send(file=file)
         else:
-            await interaction.response.send_message("The privacy terms image is currently unavailable.")
+            await ctx.send("The privacy terms image is currently unavailable.")
 
-    @app_commands.command(name="whatsnew", description="See the newest features and functions.")
-    async def whatsnew_command(self, interaction: discord.Interaction):
+    @commands.hybrid_command(name="whatsnew", description="See the newest features and functions.")
+    async def whatsnew_command(self, ctx: commands.Context):
         embed = discord.Embed(
             title="✨ What's New in Yuuri Bot?",
             description="Here are the latest features and updates!\n\n• **Texting Triggers**: Now you can add a trigger respond depending on what people send using `/trigger add | list | remove` to manage and adding trigger!\n • **AniList Integration**: We now have AniList integration! Check out at `/anilist` to get a list of commands!",
@@ -116,9 +122,9 @@ class Help(commands.Cog):
             embed.set_image(url="attachment://new.gif")
             
         if file:
-            await interaction.response.send_message(embed=embed, file=file)
+            await ctx.send(embed=embed, file=file)
         else:
-            await interaction.response.send_message(embed=embed)
+            await ctx.send(embed=embed)
 
 async def setup(bot):
     await bot.add_cog(Help(bot))

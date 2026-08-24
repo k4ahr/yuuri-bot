@@ -16,9 +16,9 @@ class GasPrice(commands.Cog):
             return s[:-3] + "." + s[-3:]
         return s
 
-    @app_commands.command(name="gas", description="Fetches the latest gas prices from Petrolimex.")
-    async def get_gas_price(self, interaction: discord.Interaction):
-        await interaction.response.defer(thinking=True)
+    @commands.hybrid_command(name="gas", description="Fetches the latest gas prices from Petrolimex.")
+    async def get_gas_price(self, ctx: commands.Context):
+        await ctx.defer()
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -30,7 +30,7 @@ class GasPrice(commands.Cog):
             try:
                 async with session.get(self.api_url, headers=headers) as resp:
                     if resp.status != 200:
-                        await interaction.followup.send("Failed to fetch gas prices.")
+                        await ctx.send("Failed to fetch gas prices.")
                         return
                     
                     data = await resp.json()
@@ -79,13 +79,13 @@ class GasPrice(commands.Cog):
                             embed.set_image(url="attachment://gas_banner.gif")
                             
                         if file:
-                            await interaction.followup.send(embed=embed, file=file)
+                            await ctx.send(embed=embed, file=file)
                         else:
-                            await interaction.followup.send(embed=embed)
+                            await ctx.send(embed=embed)
                     else:
-                        await interaction.followup.send("No prices found.")
+                        await ctx.send("No prices found.")
             except Exception as e:
-                await interaction.followup.send(f"An error occurred while fetching gas prices: {e}")
+                await ctx.send(f"An error occurred while fetching gas prices: {e}")
 
 async def setup(bot):
     await bot.add_cog(GasPrice(bot))

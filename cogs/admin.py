@@ -1,13 +1,17 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+import typing
 from core.data_manager import data_manager
 
-async def is_admin_or_role(interaction: discord.Interaction):
-    if interaction.user.guild_permissions.administrator:
+async def is_admin_or_role(ctx_or_interaction: typing.Union[commands.Context, discord.Interaction]):
+    user = ctx_or_interaction.author if isinstance(ctx_or_interaction, commands.Context) else ctx_or_interaction.user
+    guild = ctx_or_interaction.guild
+    
+    if user.guild_permissions.administrator:
         return True
     
-    config = await data_manager.get_server_config(interaction.guild_id)
+    config = await data_manager.get_server_config(guild.id)
     admin_role_ids = config.get("admin_role_ids", [])
     
     old_admin_role_id = config.get("admin_role_id")
@@ -15,18 +19,24 @@ async def is_admin_or_role(interaction: discord.Interaction):
         admin_role_ids.append(old_admin_role_id)
         
     for role_id in admin_role_ids:
-        role = interaction.guild.get_role(role_id)
-        if role and role in interaction.user.roles:
+        role = guild.get_role(role_id)
+        if role and role in user.roles:
             return True
             
-    await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+    if isinstance(ctx_or_interaction, commands.Context):
+        await ctx_or_interaction.send("You do not have permission to use this command.", ephemeral=True)
+    else:
+        await ctx_or_interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
     return False
 
-async def is_supporter_or_admin(interaction: discord.Interaction):
-    if interaction.user.guild_permissions.administrator:
+async def is_supporter_or_admin(ctx_or_interaction: typing.Union[commands.Context, discord.Interaction]):
+    user = ctx_or_interaction.author if isinstance(ctx_or_interaction, commands.Context) else ctx_or_interaction.user
+    guild = ctx_or_interaction.guild
+
+    if user.guild_permissions.administrator:
         return True
     
-    config = await data_manager.get_server_config(interaction.guild_id)
+    config = await data_manager.get_server_config(guild.id)
     admin_role_ids = config.get("admin_role_ids", [])
     
     old_admin_role_id = config.get("admin_role_id")
@@ -34,17 +44,20 @@ async def is_supporter_or_admin(interaction: discord.Interaction):
         admin_role_ids.append(old_admin_role_id)
         
     for role_id in admin_role_ids:
-        role = interaction.guild.get_role(role_id)
-        if role and role in interaction.user.roles:
+        role = guild.get_role(role_id)
+        if role and role in user.roles:
             return True
             
     supporter_role_id = config.get("supporter_role_id")
     if supporter_role_id:
-        role = interaction.guild.get_role(supporter_role_id)
-        if role and role in interaction.user.roles:
+        role = guild.get_role(supporter_role_id)
+        if role and role in user.roles:
             return True
             
-    await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+    if isinstance(ctx_or_interaction, commands.Context):
+        await ctx_or_interaction.send("You do not have permission to use this command.", ephemeral=True)
+    else:
+        await ctx_or_interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
     return False
 
 class RolesConfigView(discord.ui.View):
@@ -225,20 +238,20 @@ class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="rolesconfig", description="Open the interactive role configuration dashboard.")
-    @app_commands.default_permissions(administrator=True)
-    async def rolesconfig(self, interaction: discord.Interaction):
-        config = await data_manager.get_server_config(interaction.guild_id)
-        view = RolesConfigView(interaction.guild, config)
+    @commands.hybrid_command(name="rolesconfig", description="Open the interactive role configuration dashboard.")
+    @commands.has_permissions(administrator=True)
+    async def rolesconfig(self, ctx: commands.Context):
+        config = await data_manager.get_server_config(ctx.guild.id)
+        view = RolesConfigView(ctx.guild, config)
         embed = view.create_embed()
-        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+        await ctx.send(embed=embed, view=view, ephemeral=True)
 
-    @app_commands.command(name="setlogchannel", description="Set the channel where bot logs will be sent.")
+    @commands.hybrid_command(name="setlogchannel", description="Set the channel where bot logs will be sent.")
     @app_commands.describe(channel="The text channel for logs.")
-    @app_commands.check(is_admin_or_role)
-    async def set_log_channel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        await data_manager.set_server_config(interaction.guild_id, "log_channel_id", channel.id)
-        await interaction.response.send_message(f"Log channel set to {channel.mention}.", ephemeral=True)
+    @commands.check(is_admin_or_role)
+    async def set_log_channel(self, ctx: commands.Context, channel: discord.TextChannel):
+        await data_manager.set_server_config(ctx.guild.id, "log_channel_id", channel.id)
+        await ctx.send(f"Log channel set to {channel.mention}.", ephemeral=True)
 
     @app_commands.command(name="say", description="Send an anonymous message through the bot.")
     @app_commands.describe(
@@ -274,48 +287,48 @@ class Admin(commands.Cog):
                 embed.add_field(name="Message", value=message, inline=False)
                 await log_channel.send(embed=embed)
 
-    @app_commands.command(name="addresponse", description="Add a random response when the bot is mentioned.")
+    @commands.hybrid_command(name="addresponse", description="Add a random response when the bot is mentioned.")
     @app_commands.describe(response="The text to add.")
-    @app_commands.check(is_supporter_or_admin)
-    async def add_response(self, interaction: discord.Interaction, response: str):
-        config = await data_manager.get_server_config(interaction.guild_id)
+    @commands.check(is_supporter_or_admin)
+    async def add_response(self, ctx: commands.Context, response: str):
+        config = await data_manager.get_server_config(ctx.guild.id)
         responses = config.get("mention_responses", [])
         responses.append(response)
-        await data_manager.set_server_config(interaction.guild_id, "mention_responses", responses)
-        await interaction.response.send_message(f"Added response: `{response}`", ephemeral=True)
+        await data_manager.set_server_config(ctx.guild.id, "mention_responses", responses)
+        await ctx.send(f"Added response: `{response}`", ephemeral=True)
 
-    @app_commands.command(name="listresponses", description="List all configured ping responses.")
-    @app_commands.check(is_supporter_or_admin)
-    async def list_responses(self, interaction: discord.Interaction):
-        config = await data_manager.get_server_config(interaction.guild_id)
+    @commands.hybrid_command(name="listresponses", description="List all configured ping responses.")
+    @commands.check(is_supporter_or_admin)
+    async def list_responses(self, ctx: commands.Context):
+        config = await data_manager.get_server_config(ctx.guild.id)
         responses = config.get("mention_responses", [])
         if not responses:
-            return await interaction.response.send_message("No responses configured.", ephemeral=True)
+            return await ctx.send("No responses configured.", ephemeral=True)
             
         text = "\n".join([f"{i+1}. {r}" for i, r in enumerate(responses)])
-        await interaction.response.send_message(f"**Configured Responses:**\n{text}", ephemeral=True)
+        await ctx.send(f"**Configured Responses:**\n{text}", ephemeral=True)
 
-    @app_commands.command(name="removeresponse", description="Remove a ping response by index.")
+    @commands.hybrid_command(name="removeresponse", description="Remove a ping response by index.")
     @app_commands.describe(index="The index of the response to remove (see /listresponses).")
-    @app_commands.check(is_supporter_or_admin)
-    async def remove_response(self, interaction: discord.Interaction, index: int):
-        config = await data_manager.get_server_config(interaction.guild_id)
+    @commands.check(is_supporter_or_admin)
+    async def remove_response(self, ctx: commands.Context, index: int):
+        config = await data_manager.get_server_config(ctx.guild.id)
         responses = config.get("mention_responses", [])
         
         idx = index - 1
         if 0 <= idx < len(responses):
             removed = responses.pop(idx)
-            await data_manager.set_server_config(interaction.guild_id, "mention_responses", responses)
-            await interaction.response.send_message(f"Removed response: `{removed}`", ephemeral=True)
+            await data_manager.set_server_config(ctx.guild.id, "mention_responses", responses)
+            await ctx.send(f"Removed response: `{removed}`", ephemeral=True)
         else:
-            await interaction.response.send_message("Invalid index.", ephemeral=True)
+            await ctx.send("Invalid index.", ephemeral=True)
 
-    @app_commands.command(name="botstats", description="Check how many servers and users the bot is currently in.")
-    @app_commands.default_permissions(administrator=True)
-    async def get_bot_stats(self, interaction: discord.Interaction):
+    @commands.hybrid_command(name="botstats", description="Check how many servers and users the bot is currently in.")
+    @commands.has_permissions(administrator=True)
+    async def get_bot_stats(self, ctx: commands.Context):
         # Ensure only the bot owner can view this sensitive information
-        if not await self.bot.is_owner(interaction.user):
-            return await interaction.response.send_message("Only the bot owner can use this command.", ephemeral=True)
+        if not await self.bot.is_owner(ctx.author):
+            return await ctx.send("Only the bot owner can use this command.", ephemeral=True)
             
         guilds = self.bot.guilds
         total_members = sum(g.member_count for g in guilds if g.member_count is not None)
@@ -329,7 +342,7 @@ class Admin(commands.Cog):
         embed.add_field(name="Total Users", value=str(total_members), inline=True)
         embed.description = f"**Servers:**\n{guild_list}"
         
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await ctx.send(embed=embed, ephemeral=True)
 
 async def setup(bot):
     await bot.add_cog(Admin(bot))

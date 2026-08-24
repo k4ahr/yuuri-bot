@@ -296,7 +296,19 @@ class AniList(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         
-    anilist = app_commands.Group(name="anilist", description="AniList integration commands")
+    @commands.hybrid_group(name="anilist", description="AniList integration commands")
+    async def anilist(self, ctx: commands.Context):
+        pass
+
+    async def cog_command_error(self, ctx: commands.Context, error: commands.CommandError):
+        original = getattr(error, 'original', error)
+        if isinstance(original, AniListAPIError):
+            file = discord.File("assets/images/api_down.jpg")
+            content = f"**Error {original.status_code}**: {original.message}"
+            try:
+                await ctx.send(content=content, file=file)
+            except Exception: pass
+            return
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         original = getattr(error, 'original', error)
@@ -588,54 +600,59 @@ class AniList(commands.Cog):
 
 
     @anilist.command(name="login", description="Link your AniList account to the bot.")
-    async def al_login(self, interaction: discord.Interaction):
-        user_data = await data_manager.get_user_data(interaction.user.id)
+    async def al_login(self, ctx: commands.Context):
+        user_data = await data_manager.get_user_data(ctx.author.id)
         if user_data.get("anilist_token"):
-            await interaction.response.send_message("You are already logged in to AniList!", ephemeral=True)
+            await ctx.send("You are already logged in to AniList!", ephemeral=True)
             return
             
         client_id = os.getenv("ANILIST_CLIENT_ID")
         redirect_uri = os.getenv("ANILIST_REDIRECT_URI")
         
         if not client_id or not redirect_uri:
-            await interaction.response.send_message("AniList integration is not fully configured. Please contact the bot admin.", ephemeral=True)
+            await ctx.send("AniList integration is not fully configured. Please contact the bot admin.", ephemeral=True)
             return
 
-        state = data_manager.encrypt_string(str(interaction.user.id))
+        state = data_manager.encrypt_string(str(ctx.author.id))
         auth_url = f"https://anilist.co/api/v2/oauth/authorize?client_id={client_id}&redirect_uri={redirect_uri}&response_type=code&state={state}"
         
         view = discord.ui.View()
         view.add_item(discord.ui.Button(label="Click to Link AniList Account", url=auth_url, style=discord.ButtonStyle.link))
         
-        await interaction.response.send_message("Please click the button below to authorize the bot on AniList.", view=view, ephemeral=True)
+        msg = await ctx.send("Please click the button below to authorize the bot on AniList.", view=view, ephemeral=True)
         
         try:
             user_id, success = await self.bot.wait_for(
                 'anilist_login', 
-                check=lambda u, s: u == interaction.user.id, 
+                check=lambda u, s: u == ctx.author.id, 
                 timeout=300.0
             )
-            if success:
-                await interaction.edit_original_response(content="✅ **Your AniList account has been successfully linked!**", view=None)
+            content = "✅ **Your AniList account has been successfully linked!**" if success else "❌ **Failed to link your AniList account.**"
+            if ctx.interaction:
+                await ctx.interaction.edit_original_response(content=content, view=None)
             else:
-                await interaction.edit_original_response(content="❌ **Failed to link your AniList account.**", view=None)
+                await msg.edit(content=content, view=None)
         except asyncio.TimeoutError:
-            await interaction.edit_original_response(content="⏳ **Login timed out. Please try running the command again.**", view=None)
+            content = "⏳ **Login timed out. Please try running the command again.**"
+            if ctx.interaction:
+                await ctx.interaction.edit_original_response(content=content, view=None)
+            else:
+                await msg.edit(content=content, view=None)
 
     @anilist.command(name="logout", description="Unlink your AniList account from the bot.")
-    async def al_logout(self, interaction: discord.Interaction):
-        user_data = await data_manager.get_user_data(interaction.user.id)
+    async def al_logout(self, ctx: commands.Context):
+        user_data = await data_manager.get_user_data(ctx.author.id)
         if not user_data.get("anilist_token"):
-            await interaction.response.send_message("You haven't logged in to AniList yet.", ephemeral=True)
+            await ctx.send("You haven't logged in to AniList yet.", ephemeral=True)
             return
             
-        await data_manager.remove_user_data(interaction.user.id, "anilist_token")
-        await interaction.response.send_message("👋 Your AniList account has been unlinked.", ephemeral=True)
+        await data_manager.remove_user_data(ctx.author.id, "anilist_token")
+        await ctx.send("👋 Your AniList account has been unlinked.", ephemeral=True)
 
     @anilist.command(name="profile", description="View an AniList profile.")
     @app_commands.describe(user="Discord ping (@user), AniList username, ID, or profile URL")
-    async def al_profile(self, interaction: discord.Interaction, user: str = None):
-        await interaction.response.defer()
+    async def al_profile(self, ctx: commands.Context, user: str = None):
+        await ctx.defer()
         
         embed = None
         error = None
@@ -659,32 +676,32 @@ class AniList(commands.Cog):
             else:
                 embed, error = await self.build_user_embed(username=user)
         else:
-            embed, error = await self.build_user_embed(discord_user_id=interaction.user.id)
+            embed, error = await self.build_user_embed(discord_user_id=ctx.author.id)
             
         if embed:
-            await interaction.followup.send(embed=embed)
+            await ctx.send(embed=embed)
         else:
-            await interaction.followup.send(f"❌ {error}")
+            await ctx.send(f"❌ {error}")
 
     @anilist.command(name="search", description="Search AniList across all categories, or paste a link.")
-    async def search_all(self, interaction: discord.Interaction, query: str):
-        await interaction.response.defer()
+    async def search_all(self, ctx: commands.Context, query: str):
+        await ctx.defer()
         
         # Check if URL
         match = re.search(r'anilist\.co/(anime|manga|character|staff|user)/([^/]+)', query.lower())
         if match:
             category, item_id = match.groups()
             embed = None
-            if category == "anime": embed = await self.build_media_embed(interaction.user.id, media_id=item_id, media_type="ANIME")
-            elif category == "manga": embed = await self.build_media_embed(interaction.user.id, media_id=item_id, media_type="MANGA")
+            if category == "anime": embed = await self.build_media_embed(ctx.author.id, media_id=item_id, media_type="ANIME")
+            elif category == "manga": embed = await self.build_media_embed(ctx.author.id, media_id=item_id, media_type="MANGA")
             elif category == "character": embed = await self.build_character_embed(char_id=item_id)
             elif category == "staff": embed = await self.build_staff_embed(staff_id=item_id)
             elif category == "user":
                 if item_id.isdigit(): embed, _ = await self.build_user_embed(user_id=int(item_id))
                 else: embed, _ = await self.build_user_embed(username=item_id)
             
-            if embed: await interaction.followup.send(embed=embed)
-            else: await interaction.followup.send("❌ Invalid AniList link or data not found.")
+            if embed: await ctx.send(embed=embed)
+            else: await ctx.send("❌ Invalid AniList link or data not found.")
             return
 
         # Fetch master search
@@ -693,44 +710,51 @@ class AniList(commands.Cog):
         except AniListAPIError:
             raise
         except Exception as e:
-            await interaction.followup.send("❌ An error occurred while searching.")
+            await ctx.send("❌ An error occurred while searching.")
             return
 
         if not data:
-            await interaction.followup.send("❌ An error occurred while searching.")
+            await ctx.send("❌ An error occurred while searching.")
             return
             
-        view = AniListSearchView(self, interaction, data, query)
+        if not ctx.interaction:
+            # Send just the first result if prefix command since pagination relies on views which is interaction
+            # Actually, views work with prefix commands too! Discord handles interactions inside views just fine.
+            # But the AniListSearchView takes `interaction` as parameter in its __init__.
+            # We can pass `ctx` instead of `interaction` if we refactor it, but a simpler way is to just generate embed and send.
+            pass
+        
+        view = AniListSearchView(self, ctx.interaction, data, query)
         embed = view.generate_embed()
-        await interaction.followup.send(embed=embed, view=view)
+        await ctx.send(embed=embed, view=view)
 
     @anilist.command(name="anime", description="Search for an anime on AniList")
-    async def search_anime(self, interaction: discord.Interaction, query: str):
-        await interaction.response.defer()
-        embed = await self.build_media_embed(interaction.user.id, search=query, media_type="ANIME")
-        if embed: await interaction.followup.send(embed=embed)
-        else: await interaction.followup.send(f"❌ Could not find any anime matching `{query}`.")
+    async def search_anime(self, ctx: commands.Context, query: str):
+        await ctx.defer()
+        embed = await self.build_media_embed(ctx.author.id, search=query, media_type="ANIME")
+        if embed: await ctx.send(embed=embed)
+        else: await ctx.send(f"❌ Could not find any anime matching `{query}`.")
 
     @anilist.command(name="manga", description="Search for a manga on AniList")
-    async def search_manga(self, interaction: discord.Interaction, query: str):
-        await interaction.response.defer()
-        embed = await self.build_media_embed(interaction.user.id, search=query, media_type="MANGA")
-        if embed: await interaction.followup.send(embed=embed)
-        else: await interaction.followup.send(f"❌ Could not find any manga matching `{query}`.")
+    async def search_manga(self, ctx: commands.Context, query: str):
+        await ctx.defer()
+        embed = await self.build_media_embed(ctx.author.id, search=query, media_type="MANGA")
+        if embed: await ctx.send(embed=embed)
+        else: await ctx.send(f"❌ Could not find any manga matching `{query}`.")
 
     @anilist.command(name="character", description="Search for a character on AniList")
-    async def search_character(self, interaction: discord.Interaction, query: str):
-        await interaction.response.defer()
+    async def search_character(self, ctx: commands.Context, query: str):
+        await ctx.defer()
         embed = await self.build_character_embed(search=query)
-        if embed: await interaction.followup.send(embed=embed)
-        else: await interaction.followup.send(f"❌ Could not find any character matching `{query}`.")
+        if embed: await ctx.send(embed=embed)
+        else: await ctx.send(f"❌ Could not find any character matching `{query}`.")
         
     @anilist.command(name="staff", description="Search for a staff/author on AniList")
-    async def search_staff(self, interaction: discord.Interaction, query: str):
-        await interaction.response.defer()
+    async def search_staff(self, ctx: commands.Context, query: str):
+        await ctx.defer()
         embed = await self.build_staff_embed(search=query)
-        if embed: await interaction.followup.send(embed=embed)
-        else: await interaction.followup.send(f"❌ Could not find any staff matching `{query}`.")
+        if embed: await ctx.send(embed=embed)
+        else: await ctx.send(f"❌ Could not find any staff matching `{query}`.")
 
     @commands.Cog.listener()
     async def on_anilist_link_detected(self, message: discord.Message, category: str, item_id):
@@ -752,6 +776,38 @@ class AniList(commands.Cog):
             file = discord.File("assets/images/api_down.jpg")
             content = f"**Error {e.status_code}**: {e.message}"
             await message.reply(content=content, file=file, mention_author=False)
+
+    @commands.command(name="allogin", description="Link your AniList account to the bot.", hidden=True)
+    async def prefix_allogin(self, ctx: commands.Context):
+        await self.al_login.callback(self, ctx)
+
+    @commands.command(name="allogout", description="Unlink your AniList account from the bot.", hidden=True)
+    async def prefix_allogout(self, ctx: commands.Context):
+        await self.al_logout.callback(self, ctx)
+
+    @commands.command(name="alprofile", description="View an AniList profile.", hidden=True)
+    async def prefix_alprofile(self, ctx: commands.Context, *, user: str = None):
+        await self.al_profile.callback(self, ctx, user)
+
+    @commands.command(name="alsearch", description="Search AniList across all categories.", hidden=True)
+    async def prefix_alsearch(self, ctx: commands.Context, *, query: str):
+        await self.search_all.callback(self, ctx, query)
+
+    @commands.command(name="alanime", description="Search for an anime on AniList", hidden=True)
+    async def prefix_alanime(self, ctx: commands.Context, *, query: str):
+        await self.search_anime.callback(self, ctx, query)
+
+    @commands.command(name="almanga", description="Search for a manga on AniList", hidden=True)
+    async def prefix_almanga(self, ctx: commands.Context, *, query: str):
+        await self.search_manga.callback(self, ctx, query)
+
+    @commands.command(name="alcharacter", description="Search for a character on AniList", hidden=True)
+    async def prefix_alcharacter(self, ctx: commands.Context, *, query: str):
+        await self.search_character.callback(self, ctx, query)
+        
+    @commands.command(name="alstaff", description="Search for a staff/author on AniList", hidden=True)
+    async def prefix_alstaff(self, ctx: commands.Context, *, query: str):
+        await self.search_staff.callback(self, ctx, query)
 
 async def setup(bot):
     await bot.add_cog(AniList(bot))
