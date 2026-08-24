@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import os
 from google import genai
+from google.genai import types
 import time
 import asyncio
 
@@ -78,13 +79,16 @@ class AutoReply(commands.Cog):
                     
                     context_text = "\n".join(conversation[-50:])
                     
-                    prompt = f"{self.system_prompt}\n\nHere is the recent chat history:\n{context_text}\n\nYuuri:"
+                    prompt = f"Here is the recent chat history:\n{context_text}\n\nYuuri:"
                     
                     # Run generation in executor to not block async loop
                     response = await asyncio.to_thread(
                         self.client.models.generate_content,
                         model='gemini-3.5-flash-lite',
                         contents=prompt,
+                        config=types.GenerateContentConfig(
+                            system_instruction=self.system_prompt
+                        )
                     )
                     
                     if response.text:
