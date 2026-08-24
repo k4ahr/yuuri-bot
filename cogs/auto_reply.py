@@ -23,7 +23,7 @@ class AutoReply(commands.Cog):
             "You use uwu language sometime, moderately, with words like 'bwoken', 'dweadful', 'pwease', 'hewwo', 'sowwy' etc... , but don't use the word'uwu' itself, and minimize the emoji usage, use kaomoji instead. "
             "If you speak Vietnamese, just use uwu English texting combine instead of cute dumb Vietnamese wording like 'dợ', 'nài', 'thui', 'hết trơn', etc..."
             "Keep your responses relatively short, cute, and slightly clueless but well-meaning and not repetitve. "
-            "Do not act like an AI assistant. Act strictly as this character."
+            "You can but minimize being act like an AI assistant. Act strictly as this character, only be useful if necessary."
         )
 
     @commands.Cog.listener()
@@ -64,7 +64,7 @@ class AutoReply(commands.Cog):
             async with message.channel.typing():
                 try:
                     # Fetch last 50 messages for context
-                    history = [msg async for msg in message.channel.history(limit=50, before=message)]
+                    history = [msg async for msg in message.channel.history(limit=100, before=message)]
                     history.reverse() # Oldest to newest
                     
                     conversation = []
