@@ -5,8 +5,6 @@ from google import genai
 from google.genai import types
 import time
 import asyncio
-from core.data_manager import data_manager
-from cogs.anilist import VIEWER_QUERY, USER_ADV_QUERY
 
 class AutoReply(commands.Cog):
     def __init__(self, bot):
@@ -20,7 +18,6 @@ class AutoReply(commands.Cog):
         else:
             self.client = None
             print("WARNING: GEMINI_API_KEY not found. AI mention feature is disabled.")
-
 
         self.system_prompt = (
             "You are a cute, quirky and dumb anime girl discord bot named Yuuri. "
@@ -77,56 +74,6 @@ class AutoReply(commands.Cog):
 
             async with message.channel.typing():
                 try:
-                    # Check for anilist roasting keywords
-                    msg_content = message.content.lower()
-                    roast_keywords = ["judge", "roast", "taste", "anilist"]
-                    system_instruction = self.system_prompt
-                    
-                    if any(kw in msg_content for kw in roast_keywords):
-                        anilist_cog = self.bot.get_cog('AniList')
-                        if anilist_cog:
-                            user_data = await data_manager.get_user_data(user_id)
-                            token = user_data.get("anilist_token")
-                            if token:
-                                try:
-                                    data = await anilist_cog._fetch_graphql(VIEWER_QUERY, {}, token)
-                                    user = data.get("Viewer") if data else None
-                                    if user:
-                                        adv_data = await anilist_cog._fetch_graphql(USER_ADV_QUERY, {"userId": user["id"]})
-                                        stats = user.get("statistics", {})
-                                        anime_stats = stats.get("anime", {})
-                                        manga_stats = stats.get("manga", {})
-                                        
-                                        taste_context = (
-                                            f"\n\n[SYSTEM INSTRUCTION: The user has linked their AniList account! "
-                                            f"They asked you to judge/roast their anime/manga taste. Here is their data:\n"
-                                            f"Total Anime Watched: {anime_stats.get('count', 0)}, Mean Score: {anime_stats.get('meanScore', 0)}%\n"
-                                            f"Total Manga Read: {manga_stats.get('count', 0)}, Mean Score: {manga_stats.get('meanScore', 0)}%\n"
-                                        )
-                                        
-                                        genres = anime_stats.get("genres", [])
-                                        if genres:
-                                            genre_list = ", ".join(g["genre"] for g in genres)
-                                            taste_context += f"Top Genres: {genre_list}\n"
-                                            
-                                        if adv_data:
-                                            top_a = adv_data.get("topAnime", {}).get("mediaList", [])
-                                            if top_a:
-                                                val = ", ".join(entry["media"]["title"]["english"] or entry["media"]["title"]["romaji"] for entry in top_a)
-                                                taste_context += f"Top Anime: {val}\n"
-                                                
-                                            top_m = adv_data.get("topManga", {}).get("mediaList", [])
-                                            if top_m:
-                                                val = ", ".join(entry["media"]["title"]["english"] or entry["media"]["title"]["romaji"] for entry in top_m)
-                                                taste_context += f"Top Manga: {val}\n"
-                                        
-                                        taste_context += "Roast them brutally but stay in your cute Yuuri character!]"
-                                        system_instruction += taste_context
-                                except Exception as e:
-                                    print(f"Failed to fetch anilist data for roast: {e}")
-                            else:
-                                system_instruction += "\n\n[SYSTEM INSTRUCTION: The user asked for a roast of their anime taste, but they haven't linked their AniList account yet. Tell them to link it using the `y!allogin` command first!]"
-
                     # Fetch last 50 messages for context
                     history = [msg async for msg in message.channel.history(limit=100, before=message)]
                     history.reverse() # Oldest to newest
@@ -150,7 +97,7 @@ class AutoReply(commands.Cog):
                         model='gemini-3.5-flash-lite',
                         contents=prompt,
                         config=types.GenerateContentConfig(
-                            system_instruction=system_instruction,
+                            system_instruction=self.system_prompt,
                             temperature=0.9,
                             max_output_tokens=300,
                         )
@@ -166,4 +113,3 @@ class AutoReply(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(AutoReply(bot))
-
