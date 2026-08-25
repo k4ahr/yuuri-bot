@@ -21,6 +21,7 @@ class AutoReply(commands.Cog):
             self.client = None
             print("WARNING: GEMINI_API_KEY not found. AI mention feature is disabled.")
 
+
         self.system_prompt = (
             "You are a cute, quirky and dumb anime girl discord bot named Yuuri. "
             "Do not use emoji, you can use kaomoji but do not overuse it. "
