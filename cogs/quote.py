@@ -97,18 +97,48 @@ class Quote(commands.Cog):
             for part in parts:
                 if not part: continue
                 
-                w, _ = pilmoji_instance.getsize(part, font=font)
+                sub_segments = []
+                current_chunk = ""
+                use_fallback = False
                 
-                if current_x + w > max_width and current_x > 0 and part != " ":
-                    lines.append(current_line)
-                    current_line = []
-                    current_x = 0
+                for char in part:
+                    c = ord(char)
+                    # Support Basic Latin, Latin Extended (Vietnamese), General Punctuation, and Emojis
+                    is_latin = (c <= 0x024F) or (0x1E00 <= c <= 0x1EFF) or (0x2000 <= c <= 0x206F) or (c > 0x1F000) or (c == 0xFE0F) or (0x2600 <= c <= 0x27BF)
+                    needs_fallback = not is_latin
                     
-                if current_x == 0 and part == " ":
-                    continue
+                    if needs_fallback != use_fallback:
+                        if current_chunk:
+                            sub_segments.append((current_chunk, use_fallback))
+                        current_chunk = char
+                        use_fallback = needs_fallback
+                    else:
+                        current_chunk += char
+                
+                if current_chunk:
+                    sub_segments.append((current_chunk, use_fallback))
                     
-                current_line.append({'text': part, 'font': font, 'style': style})
-                current_x += w
+                for chunk, fallback in sub_segments:
+                    if not fallback:
+                        chunk_font = font
+                    else:
+                        if style in ('bold', 'bold_italic'):
+                            chunk_font = fonts.get('fallback_bold', font)
+                        else:
+                            chunk_font = fonts.get('fallback_normal', font)
+                            
+                    w, _ = pilmoji_instance.getsize(chunk, font=chunk_font)
+                    
+                    if current_x + w > max_width and current_x > 0 and chunk != " ":
+                        lines.append(current_line)
+                        current_line = []
+                        current_x = 0
+                        
+                    if current_x == 0 and chunk == " ":
+                        continue
+                        
+                    current_line.append({'text': chunk, 'font': chunk_font, 'style': style})
+                    current_x += w
                 
         if current_line:
             lines.append(current_line)
@@ -116,6 +146,7 @@ class Quote(commands.Cog):
         return lines
 
     def generate_quote_image(self, avatar_bytes, text, username):
+        text = text.replace('\n', ' ')
         width, height = 2560, 1080
         base = Image.new("RGB", (width, height), "black")
         
@@ -137,54 +168,74 @@ class Quote(commands.Cog):
         avatar.putalpha(mask)
         base.paste(avatar, (0, 0), avatar)
         
-        try:
-            fonts = {
-                'normal': ImageFont.truetype("assets/fonts/arial.ttf", 65),
-                'bold': ImageFont.truetype("assets/fonts/arialbd.ttf", 65),
-                'italic': ImageFont.truetype("assets/fonts/ariali.ttf", 65),
-                'bold_italic': ImageFont.truetype("assets/fonts/arialbi.ttf", 65),
-                'code': ImageFont.truetype("assets/fonts/consola.ttf", 55)
-            }
-            font_small = ImageFont.truetype("assets/fonts/arial.ttf", 45)
-            font_watermark = ImageFont.truetype("assets/fonts/arial.ttf", 30)
-        except:
-            default_font = ImageFont.load_default()
-            fonts = {
-                'normal': default_font,
-                'bold': default_font,
-                'italic': default_font,
-                'bold_italic': default_font,
-                'code': default_font
-            }
-            font_small = default_font
-            font_watermark = default_font
-            
-        with Pilmoji(base) as pilmoji:
-            text = f'"{text}"'
-            tokens = self.parse_markdown(text)
-            lines = self.wrap_tokens(tokens, pilmoji, fonts, max_width=1360)
-            
-            line_spacing = 20
-            
-            text_height = 0
-            for line in lines:
-                max_h = 0
-                for segment in line:
-                    _, h = pilmoji.getsize(segment['text'], font=segment['font'])
-                    if h > max_h: max_h = h
-                text_height += max_h + line_spacing
-            
-            if lines:
-                text_height -= line_spacing
+        font_size = 65
+        min_font_size = 30
+        
+        while font_size >= min_font_size:
+            with Pilmoji(base, emoji_scale_factor=1.0, emoji_position_offset=(0, 6)) as pilmoji:
+                try:
+                    fonts = {
+                        'normal': ImageFont.truetype("assets/fonts/arial.ttf", font_size),
+                        'bold': ImageFont.truetype("assets/fonts/arialbd.ttf", font_size),
+                        'italic': ImageFont.truetype("assets/fonts/ariali.ttf", font_size),
+                        'bold_italic': ImageFont.truetype("assets/fonts/arialbi.ttf", font_size),
+                        'code': ImageFont.truetype("assets/fonts/consola.ttf", int(font_size * 0.85)),
+                        'fallback_normal': ImageFont.truetype("assets/fonts/msyh.ttc", font_size),
+                        'fallback_bold': ImageFont.truetype("assets/fonts/msyhbd.ttc", font_size),
+                    }
+                    font_small = ImageFont.truetype("assets/fonts/arial.ttf", max(25, int(font_size * 0.7)))
+                    font_watermark = ImageFont.truetype("assets/fonts/arial.ttf", 30)
+                except:
+                    default_font = ImageFont.load_default()
+                    fonts = {
+                        'normal': default_font,
+                        'bold': default_font,
+                        'italic': default_font,
+                        'bold_italic': default_font,
+                        'code': default_font
+                    }
+                    font_small = default_font
+                    font_watermark = default_font
+                    
+                text_wrapped = f'"{text}"'
+                tokens = self.parse_markdown(text_wrapped)
+                lines = self.wrap_tokens(tokens, pilmoji, fonts, max_width=1360)
                 
-            user_text = f"— {username}"
-            _, user_height = pilmoji.getsize(user_text, font=font_small)
+                line_spacing = max(10, int(font_size * 0.3))
+                
+                text_height = 0
+                for line in lines:
+                    max_h = 0
+                    for segment in line:
+                        _, h = pilmoji.getsize(segment['text'], font=segment['font'])
+                        if h > max_h: max_h = h
+                    text_height += max_h + line_spacing
+                
+                if lines:
+                    text_height -= line_spacing
+                    
+                user_text = f"— {username}"
+                _, user_height = pilmoji.getsize(user_text, font=font_small)
+                
+                total_height = text_height + 60 + user_height
+                
+            if total_height <= 960 or font_size == min_font_size:
+                break
             
-            total_height = text_height + 60 + user_height
-            start_y = (height - total_height) // 2
+            font_size -= 5
             
-            draw_base = ImageDraw.Draw(base)
-            current_y = start_y
+        # Clear pilmoji's lru_cache to prevent huge emojis drawing at small font sizes
+        import pilmoji.core
+        for obj in vars(pilmoji.core).values():
+            if hasattr(obj, 'cache_clear'):
+                obj.cache_clear()
+            
+        start_y = (height - total_height) // 2
+        
+        draw_base = ImageDraw.Draw(base)
+        current_y = start_y
+        
+        with Pilmoji(base, emoji_scale_factor=1.0, emoji_position_offset=(0, 6)) as pilmoji:
             for line in lines:
                 line_width = sum([pilmoji.getsize(segment['text'], font=segment['font'])[0] for segment in line])
                 x = 1100 + (1360 - line_width) // 2

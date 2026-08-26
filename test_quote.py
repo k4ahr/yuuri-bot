@@ -19,6 +19,8 @@ def test_quote():
     cog = Quote(MockBot())
     
     text = "Hello __underline__ and ~~strikethrough~~ and ||spoiler|| and `code` and\n```python\nprint('hello')\n```"
+    # Make the text very long to trigger scaling
+    text = (text + " ") * 20
     username = "Albert Einstein"
     
     print("Generating quote...")
