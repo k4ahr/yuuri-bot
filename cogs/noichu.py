@@ -11,13 +11,18 @@ class Noichu(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    async def check_dictionary(self, word: str) -> bool:
+    async def check_dictionary(self, word: str) -> int:
         async with aiohttp.ClientSession() as session:
             try:
                 async with session.get(f"{DICTIONARY_API}{word}") as resp:
-                    return resp.status == 200
+                    if resp.status == 200:
+                        return 1
+                    elif resp.status == 404:
+                        return 0
+                    else:
+                        return -1
             except:
-                return False
+                return -1
 
     async def get_word_definition(self, word: str) -> dict:
         async with aiohttp.ClientSession() as session:
@@ -77,7 +82,7 @@ class Noichu(commands.Cog):
         state["used_words_list"] = []
         state["last_author_id"] = None
         await data_manager.save_noichu_state(ctx.guild.id, state)
-        await ctx.send(f"✅ Đã set kênh chơi nối chữ tại {target_channel.mention}. Game đã được reset!")
+        await ctx.send(f"✅ Set the word chain channel to {target_channel.mention}. The game has been reset!")
 
     @commands.hybrid_command(name="ncreset", description="Resets the word chain game data for the server.")
     @commands.check(is_admin_or_role)
@@ -87,7 +92,7 @@ class Noichu(commands.Cog):
         state["used_words_list"] = []
         state["last_author_id"] = None
         await data_manager.save_noichu_state(ctx.guild.id, state)
-        await ctx.send("✅ Game nối chữ đã được reset!")
+        await ctx.send("✅ The word chain game has been reset!")
 
     @commands.hybrid_command(name="nclb", description="Shows the Top 10 leaderboard for the word chain game.")
     async def nclb(self, ctx: commands.Context):
@@ -96,10 +101,10 @@ class Noichu(commands.Cog):
         lb_list.sort(key=lambda x: x["score"], reverse=True)
         
         if not lb_list: 
-            return await ctx.send("📉 Chưa có dữ liệu bảng xếp hạng nối chữ!")
+            return await ctx.send("📉 No word chain leaderboard data yet!")
 
         top_10 = lb_list[:10]
-        embed = discord.Embed(title="🏆 Bảng Xếp Hạng Noichu", color=discord.Color.gold())
+        embed = discord.Embed(title="🏆 Word Chain Leaderboard", color=discord.Color.gold())
         
         desc = ""
         for i, p in enumerate(top_10):
@@ -110,7 +115,7 @@ class Noichu(commands.Cog):
             desc += f"**{medal} {p['name']}**: `{p['score']} pts` {streak_text}\n"
             
         embed.description = desc
-        embed.set_footer(text=f"Top 10 / Tổng {len(lb_list)} người chơi")
+        embed.set_footer(text=f"Top 10 / Total {len(lb_list)} players")
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="ncrank", description="Shows word chain game rank and stats for a specific user.")
@@ -122,7 +127,7 @@ class Noichu(commands.Cog):
         lb_data = state["leaderboard"]
 
         if uid not in lb_data:
-            return await ctx.send(f"📉 **{target.display_name}** chưa có trong bảng xếp hạng. Hãy chơi game để kiếm điểm!")
+            return await ctx.send(f"📉 **{target.display_name}** is not on the leaderboard yet. Play the game to earn points!")
 
         sorted_lb = sorted(lb_data.items(), key=lambda x: x[1]['score'], reverse=True)
         
@@ -136,10 +141,10 @@ class Noichu(commands.Cog):
         elif streak >= 6: multiplier = "x2.0"
         elif streak >= 3: multiplier = "x1.5"
         
-        embed = discord.Embed(title=f"👤 Thống kê Nối Chữ: {target.display_name}", color=discord.Color.teal())
-        embed.add_field(name="🏆 Hạng", value=f"#{rank}", inline=True)
-        embed.add_field(name="✨ Điểm số", value=f"{score}", inline=True)
-        embed.add_field(name="🔥 Chuỗi thắng", value=f"{streak} (Hệ số: {multiplier})", inline=False)
+        embed = discord.Embed(title=f"👤 Word Chain Stats: {target.display_name}", color=discord.Color.teal())
+        embed.add_field(name="🏆 Rank", value=f"#{rank}", inline=True)
+        embed.add_field(name="✨ Score", value=f"{score}", inline=True)
+        embed.add_field(name="🔥 Win Streak", value=f"{streak} (Multiplier: {multiplier})", inline=False)
             
         await ctx.send(embed=embed)
 
@@ -148,7 +153,7 @@ class Noichu(commands.Cog):
         state = await data_manager.get_noichu_state(ctx.guild.id)
         count = len(state["used_words_list"])
         last = state["last_word"] or "None"
-        await ctx.send(embed=discord.Embed(title="📊 Thống kê Game Nối Chữ", description=f"**Số từ đã nối:** {count}\n**Từ cuối cùng:** {last}", color=discord.Color.gold()))
+        await ctx.send(embed=discord.Embed(title="📊 Word Chain Game Stats", description=f"**Words chained:** {count}\n**Last word:** {last}", color=discord.Color.gold()))
 
     @commands.hybrid_command(name="define", description="Looks up the definition of the current or specified word.")
     @app_commands.describe(word="The word to look up. Leaves blank for the last word.")
@@ -158,13 +163,13 @@ class Noichu(commands.Cog):
         target_word = word or state['last_word']
         
         if not target_word:
-            return await ctx.send("❌ Không có từ để định nghĩa!")
+            return await ctx.send("❌ No word to define!")
 
         res = await self.get_word_definition(target_word)
         if not res: 
-            return await ctx.send(f"❌ Chịu, không tìm thấy nghĩa của từ **'{target_word}'**.")
+            return await ctx.send(f"❌ Could not find the definition for the word **'{target_word}'**.")
 
-        embed = discord.Embed(title=f"📖 Định nghĩa: {res['word'].capitalize()}", description="\n".join(res['meanings'][:3]) if res['meanings'] else "N/A", color=discord.Color.blue())
+        embed = discord.Embed(title=f"📖 Definition: {res['word'].capitalize()}", description="\n".join(res['meanings'][:3]) if res['meanings'] else "N/A", color=discord.Color.blue())
         await ctx.send(embed=embed)
 
     @commands.Cog.listener()
@@ -190,22 +195,25 @@ class Noichu(commands.Cog):
             self.update_score(msg.author, state, is_valid_play=False)
             await data_manager.save_noichu_state(msg.guild.id, state)
             
-            suffix = "\n📉 *Chuỗi thắng của bạn đã về 0!*" if current_streak > 0 else ""
+            suffix = "\n📉 *Your win streak has been reset to 0!*" if current_streak > 0 else ""
             await msg.reply(f"{reason_text}{suffix}")
 
         if state["last_author_id"] == msg.author.id:
-            return await fail_play("❌ Bạn vừa chơi rồi, hãy đợi người khác nối tiếp!", apply_punish=False) 
+            return await fail_play("❌ You just played, please wait for someone else to continue!", apply_punish=False) 
 
         last_word = state["last_word"]
         
         if last_word and content[0] != last_word[-1]: 
-            return await fail_play(f"❌ Sai từ! Phải bắt đầu bằng chữ cái **'{last_word[-1].upper()}'**.")
+            return await fail_play(f"❌ Wrong word! It must start with the letter **'{last_word[-1].upper()}'**.")
 
         if content in state["used_words_list"]: 
-            return await fail_play("❌ Từ này đã được dùng rồi!")
+            return await fail_play("❌ This word has already been used!")
 
-        if not await self.check_dictionary(content): 
-            return await fail_play("❌ Từ này không có trong từ điển tiếng Anh hợp lệ!")
+        dict_status = await self.check_dictionary(content)
+        if dict_status == -1:
+            return await fail_play("❌ The dictionary API is currently down. Please try again later!", apply_punish=False)
+        elif dict_status == 0:
+            return await fail_play("❌ This is not a valid English word!")
 
         state["last_word"] = content
         state["last_author_id"] = msg.author.id
