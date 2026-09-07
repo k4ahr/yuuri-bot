@@ -333,7 +333,7 @@ class Admin(commands.Cog):
         guilds = self.bot.guilds
         total_members = sum(g.member_count for g in guilds if g.member_count is not None)
         
-        guild_list = "\n".join([f"- {g.name} ({g.member_count} members)" for g in guilds])
+        guild_list = "\n".join([f"- {g.name} (ID: {g.id}) - {g.member_count} members" for g in guilds])
         if len(guild_list) > 1800:
             guild_list = guild_list[:1800] + "\n... (truncated)"
             
