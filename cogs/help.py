@@ -6,7 +6,7 @@ import os
 CATEGORIES = {
     "Wordchain": ["setnoichu", "ncreset", "nclb", "ncrank", "nccount", "define"],
     "AniList": ["anilist", "allogin", "allogout", "alprofile", "alsearch", "alanime", "almanga", "alcharacter", "alstaff"],
-    "General": ["safebooru", "gas", "help", "ping", "privacy", "whatsnew"],
+    "General": ["safebooru", "gas", "help", "ping", "privacy", "whatsnew", "quote"],
     "Supporter": ["say", "addresponse", "listresponses", "removeresponse", "danbooru"],
     "Admin": ["rolesconfig", "setlogchannel", "sethoneypot", "sethoneypotdm", "embedconfig", "botstats", "trigger"]
 }
@@ -111,7 +111,7 @@ class Help(commands.Cog):
     async def whatsnew_command(self, ctx: commands.Context):
         embed = discord.Embed(
             title="✨ What's New in Yuuri Bot?",
-            description="Here are the latest features and updates!\n\n• **Texting Triggers**: Now you can add a trigger respond depending on what people send using `/trigger add | list | remove` to manage and adding trigger!\n • **AniList Integration**: We now have AniList integration! Check out at `/anilist` to get a list of commands!",
+            description="Here are the latest features and updates!\n\n• **Texting Triggers**: Now you can add a trigger respond depending on what people send using `/trigger add | list | remove` to manage and adding trigger!\n • **AniList Integration**: We now have AniList integration! Check out at `/anilist` to get a list of commands!\n • **Quote generator**: Make a quote out of someone message with the command `quote`! ",
             color=discord.Color.gold()
         )
         
