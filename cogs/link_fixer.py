@@ -12,7 +12,7 @@ URL_REGEX = r'(https?://[^\s]+)'
 PLATFORM_MAP = {
     'twitter': {
         'domains': ['twitter.com', 'www.twitter.com', 'x.com', 'www.x.com'],
-        'replace': 'fixupx.com'
+        'replace': 'fixvx.com'
     },
     'tiktok': {
         'domains': ['tiktok.com', 'www.tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com'],
