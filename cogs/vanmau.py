@@ -8,82 +8,57 @@ class VanMau(commands.Cog):
         self.bot = bot
         self.base_url = "https://api.ditmenavi.com/api"
 
-    vanmau = app_commands.Group(name="vanmau", description="Commands for Ditmenavi (Văn Mẫu) API")
+    @commands.hybrid_group(name="vanmau", description="Commands for Ditmenavi (Văn Mẫu) API", invoke_without_command=True)
+    async def vanmau_group(self, ctx: commands.Context):
+        if ctx.invoked_subcommand is None:
+            await ctx.send_help(self.vanmau_group)
 
-    def create_post_embed(self, post: dict) -> discord.Embed:
-        title = post.get("title", "No Title")
-        content = post.get("content", "")
-        
-        # Truncate content to 4000 characters to respect Discord embed limits
-        if len(content) > 4000:
-            content = content[:3997] + "..."
-            
-        embed = discord.Embed(
-            title=title,
-            description=content,
-            color=discord.Color.blurple()
-        )
-        
-        post_id = post.get("id", "?")
-        category = post.get("category", "Unknown")
-        embed.set_footer(text=f"ID: {post_id} | Category: {category}")
-        
-        submitted_by = post.get("submittedBy")
-        if submitted_by:
-            name = submitted_by.get("globalName") or submitted_by.get("global_name") or submitted_by.get("username", "Unknown")
-            avatar_url = submitted_by.get("avatar")
-            
-            if avatar_url and not avatar_url.startswith("http"):
-                discord_id = submitted_by.get("discordId")
-                if discord_id:
-                    avatar_url = f"https://cdn.discordapp.com/avatars/{discord_id}/{avatar_url}.png"
-            
-            if avatar_url:
-                embed.set_author(name=f"Submitted by {name}", icon_url=avatar_url)
-            else:
-                embed.set_author(name=f"Submitted by {name}")
-                
-        return embed
+    def extract_content(self, post: dict) -> str:
+        content = post.get("content", "No content found.")
+        # Discord message limit is 2000 characters
+        if len(content) > 2000:
+            content = content[:1997] + "..."
+        return content
 
-    @vanmau.command(name="random", description="Get a random văn mẫu")
-    async def random_post(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+    @vanmau_group.command(name="random", description="Get a random văn mẫu")
+    async def random_post(self, ctx: commands.Context):
+        await ctx.defer()
         
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{self.base_url}/posts/random", timeout=10) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        embed = self.create_post_embed(data)
-                        await interaction.followup.send(embed=embed)
+                        content = self.extract_content(data)
+                        await ctx.send(content)
                     else:
-                        await interaction.followup.send(f"Error fetching data from API (Status: {resp.status}).")
+                        await ctx.send(f"Error fetching data from API (Status: {resp.status}).")
         except Exception as e:
-            await interaction.followup.send(f"An error occurred: {e}")
+            await ctx.send(f"An error occurred: {e}")
 
-    @vanmau.command(name="get", description="Get a specific văn mẫu by ID")
+    @vanmau_group.command(name="get", description="Get a specific văn mẫu by ID")
     @app_commands.describe(post_id="The numeric ID of the post")
-    async def get_post(self, interaction: discord.Interaction, post_id: int):
-        await interaction.response.defer()
+    async def get_post(self, ctx: commands.Context, post_id: int):
+        await ctx.defer()
         
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{self.base_url}/posts/{post_id}", timeout=10) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        embed = self.create_post_embed(data)
-                        await interaction.followup.send(embed=embed)
+                        content = self.extract_content(data)
+                        await ctx.send(content)
                     elif resp.status == 404:
-                        await interaction.followup.send("Post not found.")
+                        await ctx.send("Post not found.")
                     else:
-                        await interaction.followup.send(f"Error fetching data from API (Status: {resp.status}).")
+                        await ctx.send(f"Error fetching data from API (Status: {resp.status}).")
         except Exception as e:
-            await interaction.followup.send(f"An error occurred: {e}")
+            await ctx.send(f"An error occurred: {e}")
 
-    @vanmau.command(name="search", description="Search for văn mẫu")
+    @vanmau_group.command(name="search", description="Search for văn mẫu")
     @app_commands.describe(query="The search term")
-    async def search_posts(self, interaction: discord.Interaction, query: str):
-        await interaction.response.defer()
+    async def search_posts(self, ctx: commands.Context, query: str):
+        await ctx.defer()
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -93,44 +68,38 @@ class VanMau(commands.Cog):
                         posts = data.get("posts", [])
                         
                         if not posts:
-                            await interaction.followup.send("No results found.")
+                            await ctx.send("No results found.")
                             return
                             
                         if len(posts) == 1:
-                            embed = self.create_post_embed(posts[0])
-                            await interaction.followup.send(embed=embed)
+                            content = self.extract_content(posts[0])
+                            await ctx.send(content)
                             return
                             
-                        embed = discord.Embed(
-                            title=f"Search Results for '{query}'",
-                            color=discord.Color.blurple()
-                        )
+                        lines = [f"**Search Results for '{query}'**"]
                         
-                        description_lines = []
                         for idx, post in enumerate(posts[:10], start=1):
                             title = post.get("title", "No Title")
                             post_id = post.get("id")
                             if len(title) > 80:
                                 title = title[:77] + "..."
-                            description_lines.append(f"**{idx}.** {title} `(ID: {post_id})`")
+                            lines.append(f"**{idx}.** {title} `(ID: {post_id})`")
                             
-                        embed.description = "\n".join(description_lines)
-                        
                         total = data.get("total", 0)
-                        footer_text = f"Showing top {len(posts)} results. Use /vanmau get <id> to view."
+                        footer = f"\n*Showing top {len(posts)} results. Use /vanmau get <id> to view.*"
                         if total > len(posts):
-                            footer_text += f" (Total: {total})"
-                        embed.set_footer(text=footer_text)
+                            footer = f"\n*Showing top {len(posts)} results out of {total}. Use /vanmau get <id> to view.*"
+                        lines.append(footer)
                         
-                        await interaction.followup.send(embed=embed)
+                        await ctx.send("\n".join(lines))
                     else:
-                        await interaction.followup.send(f"Error searching API (Status: {resp.status}).")
+                        await ctx.send(f"Error searching API (Status: {resp.status}).")
         except Exception as e:
-            await interaction.followup.send(f"An error occurred: {e}")
+            await ctx.send(f"An error occurred: {e}")
 
-    @vanmau.command(name="categories", description="List all available categories")
-    async def list_categories(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+    @vanmau_group.command(name="categories", description="List all available categories")
+    async def list_categories(self, ctx: commands.Context):
+        await ctx.defer()
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -140,26 +109,20 @@ class VanMau(commands.Cog):
                         categories = data.get("categories", [])
                         
                         if not categories:
-                            await interaction.followup.send("No categories found.")
+                            await ctx.send("No categories found.")
                             return
                             
-                        embed = discord.Embed(
-                            title="Văn Mẫu Categories",
-                            color=discord.Color.blurple()
-                        )
-                        
-                        category_lines = []
+                        lines = ["**Văn Mẫu Categories**"]
                         for cat in categories:
                             name = cat.get("displayName", "Unknown")
                             slug = cat.get("category", "")
-                            category_lines.append(f"• **{name}** (`{slug}`)")
+                            lines.append(f"• **{name}** (`{slug}`)")
                             
-                        embed.description = "\n".join(category_lines)
-                        await interaction.followup.send(embed=embed)
+                        await ctx.send("\n".join(lines))
                     else:
-                        await interaction.followup.send(f"Error fetching categories (Status: {resp.status}).")
+                        await ctx.send(f"Error fetching categories (Status: {resp.status}).")
         except Exception as e:
-            await interaction.followup.send(f"An error occurred: {e}")
+            await ctx.send(f"An error occurred: {e}")
 
 async def setup(bot):
     await bot.add_cog(VanMau(bot))
