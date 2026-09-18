@@ -11,7 +11,7 @@ class VanMau(commands.Cog):
     @commands.hybrid_group(name="vanmau", description="Commands for Ditmenavi (Văn Mẫu) API", invoke_without_command=True)
     async def vanmau_group(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
-            await ctx.send_help(self.vanmau_group)
+            await self._fetch_random(ctx)
 
     def extract_content(self, post: dict) -> str:
         content = post.get("content", "No content found.")
@@ -20,10 +20,8 @@ class VanMau(commands.Cog):
             content = content[:1997] + "..."
         return content
 
-    @vanmau_group.command(name="random", description="Get a random văn mẫu")
-    async def random_post(self, ctx: commands.Context):
+    async def _fetch_random(self, ctx: commands.Context):
         await ctx.defer()
-        
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{self.base_url}/posts/random", timeout=10) as resp:
@@ -35,6 +33,10 @@ class VanMau(commands.Cog):
                         await ctx.send(f"Error fetching data from API (Status: {resp.status}).")
         except Exception as e:
             await ctx.send(f"An error occurred: {e}")
+
+    @vanmau_group.command(name="random", description="Get a random văn mẫu")
+    async def random_post(self, ctx: commands.Context):
+        await self._fetch_random(ctx)
 
     @vanmau_group.command(name="get", description="Get a specific văn mẫu by ID")
     @app_commands.describe(post_id="The numeric ID of the post")
