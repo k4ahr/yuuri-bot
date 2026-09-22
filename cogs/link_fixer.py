@@ -20,7 +20,7 @@ PLATFORM_MAP = {
     },
     'instagram': {
         'domains': ['instagram.com', 'www.instagram.com'],
-        'replace': 'kkinstagram.com'
+        'replace': 'oginstagram.com'
     },
     'facebook': {
         'domains': ['facebook.com', 'www.facebook.com', 'fb.watch', 'www.fb.watch'],
