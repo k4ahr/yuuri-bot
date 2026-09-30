@@ -172,10 +172,7 @@ class GifMakerView(discord.ui.View):
                             line_width = len(line) * avg_char_width
                         x_text = (f.width - line_width) / 2
                         
-                        # Stroke for impact font effect
-                        stroke_width = max(1, int(fontsize / 15))
-                        d.text((x_text, y_text), line, font=font, fill=(0,0,0,255), 
-                               stroke_width=stroke_width, stroke_fill=(255,255,255,255))
+                        d.text((x_text, y_text), line, font=font, fill=(0,0,0,255))
                         y_text += line_height
                         
                     f = new_f
