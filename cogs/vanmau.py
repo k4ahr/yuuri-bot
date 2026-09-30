@@ -8,17 +8,27 @@ class VanMau(commands.Cog):
         self.bot = bot
         self.base_url = "https://api.ditmenavi.com/api"
 
-    @commands.hybrid_group(name="vanmau", description="Commands for Ditmenavi (Văn Mẫu) API", invoke_without_command=True)
+    @commands.hybrid_group(name="vanmau", description="Commands for Ditmenavi (Văn Mẫu) API")
     async def vanmau_group(self, ctx: commands.Context):
         if ctx.invoked_subcommand is None:
             await self._fetch_random(ctx)
 
     def extract_content(self, post: dict) -> str:
         content = post.get("content", "No content found.")
+        title = post.get("title")
+        category = post.get("category", "Unknown")
+        post_id = post.get("id")
+        
+        header = ""
+        if title and post_id:
+            header = f"**{title}** `(ID: {post_id} | Category: {category})`\n\n"
+            
         # Discord message limit is 2000 characters
-        if len(content) > 2000:
-            content = content[:1997] + "..."
-        return content
+        max_len = 2000 - len(header)
+        if len(content) > max_len:
+            content = content[:max_len-3] + "..."
+            
+        return header + content
 
     async def _fetch_random(self, ctx: commands.Context):
         await ctx.defer()
@@ -38,22 +48,37 @@ class VanMau(commands.Cog):
     async def random_post(self, ctx: commands.Context):
         await self._fetch_random(ctx)
 
-    @vanmau_group.command(name="get", description="Get a specific văn mẫu by ID")
-    @app_commands.describe(post_id="The numeric ID of the post")
-    async def get_post(self, ctx: commands.Context, post_id: int):
+    @vanmau_group.command(name="get", aliases=["id"], description="Get a specific văn mẫu by ID or random from Category")
+    @app_commands.describe(query="The numeric ID of the post, or the category slug")
+    async def get_post(self, ctx: commands.Context, query: str):
         await ctx.defer()
         
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(f"{self.base_url}/posts/{post_id}", timeout=10) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        content = self.extract_content(data)
-                        await ctx.send(content)
-                    elif resp.status == 404:
-                        await ctx.send("Post not found.")
-                    else:
-                        await ctx.send(f"Error fetching data from API (Status: {resp.status}).")
+                if query.isdigit():
+                    async with session.get(f"{self.base_url}/posts/{query}", timeout=10) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            content = self.extract_content(data)
+                            await ctx.send(content)
+                        elif resp.status == 404:
+                            await ctx.send("Post not found.")
+                        else:
+                            await ctx.send(f"Error fetching data from API (Status: {resp.status}).")
+                else:
+                    async with session.get(f"{self.base_url}/posts", params={"category": query, "limit": 100}, timeout=10) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            posts = data.get("posts", [])
+                            if not posts:
+                                await ctx.send(f"No posts found for category `{query}`.")
+                                return
+                            import random
+                            post = random.choice(posts)
+                            content = self.extract_content(post)
+                            await ctx.send(content)
+                        else:
+                            await ctx.send(f"Error fetching category data from API (Status: {resp.status}).")
         except Exception as e:
             await ctx.send(f"An error occurred: {e}")
 
@@ -80,12 +105,12 @@ class VanMau(commands.Cog):
                             
                         lines = [f"**Search Results for '{query}'**"]
                         
-                        for idx, post in enumerate(posts[:10], start=1):
+                        for post in posts[:10]:
                             title = post.get("title", "No Title")
                             post_id = post.get("id")
                             if len(title) > 80:
                                 title = title[:77] + "..."
-                            lines.append(f"**{idx}.** {title} `(ID: {post_id})`")
+                            lines.append(f"• `ID: {post_id}` - **{title}**")
                             
                         total = data.get("total", 0)
                         footer = f"\n*Showing top {len(posts)} results. Use /vanmau get <id> to view.*"
