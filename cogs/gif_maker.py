@@ -121,10 +121,7 @@ class GifMakerView(discord.ui.View):
                 
                 elif action == "bubble" and bubble:
                     b = bubble.resize((f.width, int(bubble.height * (f.width / bubble.width))), Image.Resampling.LANCZOS)
-                    new_f = Image.new('RGBA', (f.width, f.height + b.height), (255, 255, 255, 0))
-                    new_f.paste(b, (0, 0))
-                    new_f.paste(f, (0, b.height))
-                    f = new_f
+                    f.paste(b, (0, 0), b)
                     
                 elif action == "caption":
                     text = kwargs.get('caption_text', '')[:100]
