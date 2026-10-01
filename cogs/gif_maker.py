@@ -338,7 +338,7 @@ class GifMakerCog(commands.Cog):
 
                 proc = await asyncio.create_subprocess_exec(
                     'ffmpeg', '-y', '-i', in_path, '-t', '20', '-vf', "scale='min(480,iw)':-2,fps=15",
-                    '-c:v', 'libwebp', '-lossless', '0', '-q:v', '85', '-compression_level', '4', '-preset', 'default', '-loop', '0', '-an', '-vsync', '0', out_path,
+                    '-c:v', 'libwebp', '-lossless', '0', '-q:v', '85', '-compression_level', '4', '-preset', 'default', '-loop', '0', '-an', out_path,
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL
                 )
