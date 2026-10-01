@@ -273,19 +273,51 @@ class GifMakerCog(commands.Cog):
             if ref_msg.attachments:
                 attachment = ref_msg.attachments[0]
                 
-        if not attachment:
-            return await ctx.send("Please attach an image/video or reply to a message containing one.")
+        img_bytes = None
+        content_type = ""
+        filename = ""
+
+        if attachment:
+            img_bytes = await attachment.read()
+            content_type = attachment.content_type or ''
+            filename = attachment.filename.lower()
+        else:
+            if ctx.message.reference and hasattr(ctx.message.reference.resolved, 'embeds'):
+                ref_msg = ctx.message.reference.resolved
+                if ref_msg.embeds:
+                    embed = ref_msg.embeds[0]
+                    url = None
+                    if embed.video and embed.video.url:
+                        url = embed.video.url
+                    elif embed.url and "tenor.com" in embed.url:
+                        url = embed.video.url if (embed.video and embed.video.url) else (embed.thumbnail.url if embed.thumbnail else None)
+                    elif embed.image and embed.image.url:
+                        url = embed.image.url
+                    elif embed.thumbnail and embed.thumbnail.url:
+                        url = embed.thumbnail.url
+                    
+                    if url:
+                        import aiohttp
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(url) as resp:
+                                if resp.status == 200:
+                                    img_bytes = await resp.read()
+                                    content_type = resp.headers.get('content-type', '')
+                                    filename = url.split('/')[-1].split('?')[0].lower()
+            
+        if not img_bytes:
+            return await ctx.send("Please attach an image/video, reply to a message containing one, or reply to a Tenor link.")
             
         is_video = False
-        if attachment.content_type and attachment.content_type.startswith('video/'):
+        if content_type.startswith('video/') or filename.endswith(('.mp4', '.mov', '.webm', '.mkv', '.avi')):
+            is_video = True
+        elif 'gif' in content_type or 'webp' in content_type or filename.endswith(('.gif', '.webp')):
             is_video = True
                 
-        img_bytes = await attachment.read()
-        
         if is_video:
             import tempfile
             import subprocess
-            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as temp_in:
+            with tempfile.NamedTemporaryFile(delete=False) as temp_in:
                 temp_in.write(img_bytes)
                 in_path = temp_in.name
                 
@@ -300,14 +332,14 @@ class GifMakerCog(commands.Cog):
                 stdout, _ = await probe_proc.communicate()
                 try:
                     duration = float(stdout.decode('utf-8').strip())
-                    if duration > 15.5:
+                    if duration > 20.5:
                         os.remove(in_path)
-                        return await ctx.send(f"Video is too long! Your video is {duration:.1f}s, but the maximum allowed length is 15 seconds.")
+                        return await ctx.send(f"Media is too long! The length is {duration:.1f}s, but the maximum allowed length is 20 seconds.")
                 except ValueError:
                     pass
 
                 proc = await asyncio.create_subprocess_exec(
-                    'ffmpeg', '-y', '-i', in_path, '-t', '15', '-vf', 'scale=480:-1,fps=15', out_path,
+                    'ffmpeg', '-y', '-i', in_path, '-t', '20', '-vf', "scale='min(480,iw)':-2,fps=15", out_path,
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL
                 )
@@ -317,9 +349,9 @@ class GifMakerCog(commands.Cog):
                         img_bytes = f.read()
                     os.remove(out_path)
                 else:
-                    return await ctx.send("Failed to process video. FFmpeg might not be installed or failed.")
+                    return await ctx.send("Failed to process media. FFmpeg might not be installed or failed.")
             except FileNotFoundError:
-                return await ctx.send("FFmpeg is required to process videos, but it's not installed on this system.")
+                return await ctx.send("FFmpeg is required to process videos/gifs, but it's not installed on this system.")
             finally:
                 if os.path.exists(in_path):
                     os.remove(in_path)
