@@ -311,8 +311,6 @@ class GifMakerCog(commands.Cog):
         is_video = False
         if content_type.startswith('video/') or filename.endswith(('.mp4', '.mov', '.webm', '.mkv', '.avi')):
             is_video = True
-        elif 'gif' in content_type or 'webp' in content_type or filename.endswith(('.gif', '.webp')):
-            is_video = True
                 
         if is_video:
             import tempfile
@@ -321,7 +319,7 @@ class GifMakerCog(commands.Cog):
                 temp_in.write(img_bytes)
                 in_path = temp_in.name
                 
-            out_path = in_path + ".gif"
+            out_path = in_path + ".webp"
             try:
                 probe_proc = await asyncio.create_subprocess_exec(
                     'ffprobe', '-v', 'error', '-show_entries', 'format=duration', 
@@ -339,7 +337,8 @@ class GifMakerCog(commands.Cog):
                     pass
 
                 proc = await asyncio.create_subprocess_exec(
-                    'ffmpeg', '-y', '-i', in_path, '-t', '20', '-vf', "scale='min(480,iw)':-2,fps=15", out_path,
+                    'ffmpeg', '-y', '-i', in_path, '-t', '20', '-vf', "scale='min(480,iw)':-2,fps=15",
+                    '-c:v', 'libwebp', '-lossless', '0', '-q:v', '85', '-compression_level', '4', '-preset', 'default', '-loop', '0', '-an', '-vsync', '0', out_path,
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL
                 )
@@ -394,8 +393,9 @@ class GifMakerCog(commands.Cog):
                 print(f"Error converting to gif on import: {e}")
                 return b
 
-        loop = asyncio.get_running_loop()
-        img_bytes = await loop.run_in_executor(None, convert_to_animated, img_bytes, is_video)
+        if not is_video:
+            loop = asyncio.get_running_loop()
+            img_bytes = await loop.run_in_executor(None, convert_to_animated, img_bytes, is_video)
         
         if len(img_bytes) > 25 * 1024 * 1024:
             return await ctx.send("The resulting file is too large to send (>25MB). Please try a shorter or lower resolution video.")
