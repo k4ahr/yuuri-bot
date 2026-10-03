@@ -6,6 +6,76 @@ import textwrap
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 import asyncio
 
+class InitialFormatSelectView(discord.ui.View):
+    def __init__(self, ctx):
+        super().__init__(timeout=120.0)
+        self.ctx = ctx
+        self.format_chosen = None
+
+    @discord.ui.button(label="Webp", style=discord.ButtonStyle.primary)
+    async def btn_webp(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.ctx.author:
+            return await interaction.response.send_message("This is not for you.", ephemeral=True)
+        self.format_chosen = 'webp'
+        await interaction.response.defer()
+        self.stop()
+
+    @discord.ui.button(label="Gif", style=discord.ButtonStyle.primary)
+    async def btn_gif(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.ctx.author:
+            return await interaction.response.send_message("This is not for you.", ephemeral=True)
+        self.format_chosen = 'gif'
+        await interaction.response.defer()
+        self.stop()
+
+class FormatSelectViewInternal(discord.ui.View):
+    def __init__(self, parent_view):
+        super().__init__(timeout=60.0)
+        self.parent_view = parent_view
+        self.format_chosen = None
+        
+    @discord.ui.button(label="Webp", style=discord.ButtonStyle.primary)
+    async def btn_webp(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.parent_view.ctx.author:
+            return await interaction.response.send_message("This is not for you.", ephemeral=True)
+        self.format_chosen = 'webp'
+        await interaction.response.defer()
+        await interaction.delete_original_response()
+        self.stop()
+        
+    @discord.ui.button(label="Gif", style=discord.ButtonStyle.primary)
+    async def btn_gif(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.parent_view.ctx.author:
+            return await interaction.response.send_message("This is not for you.", ephemeral=True)
+        self.format_chosen = 'gif'
+        await interaction.response.defer()
+        await interaction.delete_original_response()
+        self.stop()
+
+class BubbleSelectViewInternal(discord.ui.View):
+    def __init__(self, parent_view):
+        super().__init__(timeout=60.0)
+        self.parent_view = parent_view
+        self.bubble_chosen = None
+        
+    @discord.ui.button(label="Right", style=discord.ButtonStyle.primary)
+    async def btn_right(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.parent_view.ctx.author:
+            return await interaction.response.send_message("This is not for you.", ephemeral=True)
+        self.bubble_chosen = 'right'
+        await interaction.response.defer()
+        await interaction.delete_original_response()
+        self.stop()
+        
+    @discord.ui.button(label="Left", style=discord.ButtonStyle.primary)
+    async def btn_left(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.parent_view.ctx.author:
+            return await interaction.response.send_message("This is not for you.", ephemeral=True)
+        self.bubble_chosen = 'left'
+        await interaction.response.defer()
+        await interaction.delete_original_response()
+        self.stop()
+
 class GifMakerView(discord.ui.View):
     def __init__(self, ctx, initial_bytes, initial_format='webp', is_video=False):
         super().__init__(timeout=600)
@@ -28,7 +98,7 @@ class GifMakerView(discord.ui.View):
             discord.SelectOption(label="Reduce resolution", value="resize", description="Reduce resolution by %"),
             discord.SelectOption(label="Add speech bubble", value="bubble", description="Add a bubble speech on top"),
             discord.SelectOption(label="Optimize gif", value="optimize", description="Optimize the gif"),
-            discord.SelectOption(label="Convert to GIF & optimize", value="to_gif", description="Convert to .GIF format"),
+            discord.SelectOption(label="Convert to", value="convert_format", description="Change output format"),
             discord.SelectOption(label="Add whitebox caption", value="caption", description="Add a whitebox caption on top"),
             discord.SelectOption(label="Undo", value="undo", description="Revert last change")
         ]
@@ -60,6 +130,39 @@ class GifMakerView(discord.ui.View):
         elif action == "resize":
             modal = ResizeModal(self)
             await interaction.response.send_modal(modal)
+            return
+            
+        elif action == "bubble":
+            embed = discord.Embed(description="Choose the bubble direction:")
+            view = BubbleSelectViewInternal(self)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            await view.wait()
+            if view.bubble_chosen:
+                msg = await interaction.message.channel.send("Adding bubble...", delete_after=3)
+                await self.process_image_action("bubble", direction=view.bubble_chosen)
+                await interaction.message.edit(
+                    attachments=[discord.File(io.BytesIO(self.history[-1]), filename=f"output.{self.current_format}")], 
+                    view=self
+                )
+            return
+            
+        elif action == "convert_format":
+            embed = discord.Embed(
+                description="Choose the format you want to convert\n"
+                            "**Webp**: Better optimization, better quality, better for transparency image from PNG/APNG\n"
+                            "**Gif**: Better legacy support, use this if you import a static image and Discord do detect this as an animated image"
+            )
+            view = FormatSelectViewInternal(self)
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            await view.wait()
+            if view.format_chosen:
+                self.current_format = view.format_chosen
+                msg = await interaction.message.channel.send("Converting format...", delete_after=3)
+                await self.process_image_action("convert_format", format=view.format_chosen)
+                await interaction.message.edit(
+                    attachments=[discord.File(io.BytesIO(self.history[-1]), filename=f"output.{self.current_format}")], 
+                    view=self
+                )
             return
             
         elif action == "caption":
@@ -99,8 +202,9 @@ class GifMakerView(discord.ui.View):
             durations = []
             
             if action == "bubble":
+                direction = kwargs.get("direction", "right")
                 try:
-                    bubble = Image.open("assets/images/bubble.png").convert("RGBA")
+                    bubble = Image.open(f"assets/images/bubble_{direction}.png").convert("RGBA")
                 except Exception:
                     bubble = None
                     
@@ -157,10 +261,12 @@ class GifMakerView(discord.ui.View):
                     padding_bottom = 30
                     text_box_height = len(lines) * line_height + padding_top + padding_bottom
                     
-                    new_f = Image.new('RGBA', (f.width, f.height + text_box_height), (255, 255, 255, 255))
-                    new_f.paste(f, (0, text_box_height))
+                    new_f = Image.new('RGBA', (f.width, f.height + text_box_height), (0, 0, 0, 0))
                     
                     d = ImageDraw.Draw(new_f)
+                    d.rectangle([0, 0, f.width, text_box_height], fill=(255, 255, 255, 255))
+                    
+                    new_f.paste(f, (0, text_box_height))
                     y_text = padding_top
                     for line in lines:
                         try:
@@ -192,17 +298,20 @@ class GifMakerView(discord.ui.View):
                 save_kwargs['save_all'] = True
                 save_kwargs['loop'] = 0
             
-            if action in ["optimize", "to_gif"]:
+            if action == "optimize":
                 save_kwargs['optimize'] = True
                 
-            if action == "to_gif":
-                self.current_format = 'gif'
+            if action == "convert_format":
+                self.current_format = kwargs.get('format', self.current_format).lower()
                 
             format_to_save = 'GIF' if self.current_format == 'gif' else 'WEBP'
+            self.current_format = format_to_save.lower()
             if format_to_save == 'WEBP':
                 save_kwargs['method'] = 6
                 if 'optimize' in save_kwargs:
                     del save_kwargs['optimize']
+            else:
+                save_kwargs['disposal'] = 2
                     
             frames[0].save(out, format=format_to_save, **save_kwargs)
             return out.getvalue()
@@ -279,7 +388,7 @@ class GifMakerCog(commands.Cog):
 
         if attachment:
             img_bytes = await attachment.read()
-            content_type = attachment.content_type or ''
+            content_type = (attachment.content_type or '').lower()
             filename = attachment.filename.lower()
         else:
             if ctx.message.reference and hasattr(ctx.message.reference.resolved, 'embeds'):
@@ -289,8 +398,6 @@ class GifMakerCog(commands.Cog):
                     url = None
                     if embed.video and embed.video.url:
                         url = embed.video.url
-                    elif embed.url and "tenor.com" in embed.url:
-                        url = embed.video.url if (embed.video and embed.video.url) else (embed.thumbnail.url if embed.thumbnail else None)
                     elif embed.image and embed.image.url:
                         url = embed.image.url
                     elif embed.thumbnail and embed.thumbnail.url:
@@ -302,11 +409,11 @@ class GifMakerCog(commands.Cog):
                             async with session.get(url) as resp:
                                 if resp.status == 200:
                                     img_bytes = await resp.read()
-                                    content_type = resp.headers.get('content-type', '')
+                                    content_type = resp.headers.get('content-type', '').lower()
                                     filename = url.split('/')[-1].split('?')[0].lower()
             
         if not img_bytes:
-            return await ctx.send("Please attach an image/video, reply to a message containing one, or reply to a Tenor link.")
+            return await ctx.send("Please attach an image/video, reply to a message containing one, or reply to a link containing media.")
             
         is_video = False
         if content_type.startswith('video/') or filename.endswith(('.mp4', '.mov', '.webm', '.mkv', '.avi')):
@@ -355,7 +462,35 @@ class GifMakerCog(commands.Cog):
                 if os.path.exists(in_path):
                     os.remove(in_path)
 
-        def convert_to_animated(b, is_vid):
+        is_animated_img = False
+        original_fmt = 'webp'
+        if not is_video:
+            try:
+                img = Image.open(io.BytesIO(img_bytes))
+                is_animated_img = getattr(img, "is_animated", False)
+                original_fmt = img.format.lower() if img.format else 'webp'
+            except:
+                pass
+
+        prompt_msg = None
+        if is_animated_img:
+            chosen_fmt = original_fmt
+        else:
+            embed = discord.Embed(
+                description="Choose the format you want to convert\n"
+                            "**Webp**: Better optimization, better quality, better for transparency image from PNG/APNG\n"
+                            "**Gif**: Better legacy support, use this if you import a static image and Discord do detect this as an animated image"
+            )
+            prompt_view = InitialFormatSelectView(ctx)
+            prompt_msg = await ctx.send(embed=embed, view=prompt_view)
+            await prompt_view.wait()
+            
+            if not prompt_view.format_chosen:
+                return
+                
+            chosen_fmt = prompt_view.format_chosen
+
+        def convert_to_animated(b, target_fmt):
             try:
                 img = Image.open(io.BytesIO(b))
                 frames = []
@@ -368,7 +503,7 @@ class GifMakerCog(commands.Cog):
                     durations.append(frame.info.get('duration', 100))
                 
                 out = io.BytesIO()
-                fmt = 'WEBP' if is_vid else 'GIF'
+                fmt = target_fmt.upper()
                 save_kwargs = {
                     'format': fmt,
                     'save_all': True,
@@ -378,6 +513,8 @@ class GifMakerCog(commands.Cog):
                 }
                 if fmt == 'WEBP':
                     save_kwargs['method'] = 6
+                elif fmt == 'GIF':
+                    save_kwargs['disposal'] = 2
                 
                 if len(frames) == 1:
                     frames.append(frames[0].copy())
@@ -390,19 +527,24 @@ class GifMakerCog(commands.Cog):
                 frames[0].save(out, **save_kwargs)
                 return out.getvalue()
             except Exception as e:
-                print(f"Error converting to gif on import: {e}")
+                print(f"Error converting to {target_fmt} on import: {e}")
                 return b
 
-        if not is_video:
+        if not (is_video and chosen_fmt == 'webp') and not is_animated_img:
             loop = asyncio.get_running_loop()
-            img_bytes = await loop.run_in_executor(None, convert_to_animated, img_bytes, is_video)
+            img_bytes = await loop.run_in_executor(None, convert_to_animated, img_bytes, chosen_fmt)
         
         if len(img_bytes) > 25 * 1024 * 1024:
-            return await ctx.send("The resulting file is too large to send (>25MB). Please try a shorter or lower resolution video.")
+            msg_content = "The resulting file is too large to send (>25MB). Please try a shorter or lower resolution media."
+            if prompt_msg:
+                return await prompt_msg.edit(content=msg_content, embed=None, view=None)
+            else:
+                return await ctx.send(msg_content)
             
-        initial_fmt = 'webp' if is_video else 'gif'
-        view = GifMakerView(ctx, img_bytes, initial_format=initial_fmt, is_video=is_video)
-        file = discord.File(io.BytesIO(img_bytes), filename=f"output.{initial_fmt}")
+        view = GifMakerView(ctx, img_bytes, initial_format=chosen_fmt, is_video=is_video)
+        file = discord.File(io.BytesIO(img_bytes), filename=f"output.{chosen_fmt}")
+        if prompt_msg:
+            await prompt_msg.delete()
         await ctx.send("Gif Maker loaded:", file=file, view=view)
 
 async def setup(bot):

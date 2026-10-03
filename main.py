@@ -22,7 +22,7 @@ class YuuriBot(commands.Bot):
         intents.message_content = True
         
         super().__init__(
-            command_prefix="y!",
+            command_prefix=("y!", "Y!"),
             intents=intents,
             case_insensitive=True,
             help_command=None # Removed default help command
