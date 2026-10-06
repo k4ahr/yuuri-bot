@@ -6,9 +6,10 @@ import os
 CATEGORIES = {
     "Wordchain": ["setnoichu", "ncreset", "nclb", "ncrank", "nccount", "define"],
     "AniList": ["anilist", "allogin", "allogout", "alprofile", "alsearch", "alanime", "almanga", "alcharacter", "alstaff"],
-    "General": ["safebooru", "gas", "help", "ping", "privacy", "whatsnew", "quote"],
+    "General": ["safebooru", "gas", "help", "ping", "privacy", "whatsnew", "quote", "quotes", "gifmaker", "vanmau"],
     "Supporter": ["say", "addresponse", "listresponses", "removeresponse", "danbooru"],
-    "Admin": ["rolesconfig", "setlogchannel", "sethoneypot", "sethoneypotdm", "embedconfig", "botstats", "trigger"]
+    "Admin": ["rolesconfig", "setlogchannel", "sethoneypot", "sethoneypotdm", "embedconfig", "botstats", "trigger", "sync"],
+    "AI Features": ["aiactivate", "aiprompt", "aitoggle"]
 }
 
 class HelpSelect(discord.ui.Select):
@@ -17,6 +18,7 @@ class HelpSelect(discord.ui.Select):
             discord.SelectOption(label="General", description="General & utility commands", emoji="📁"),
             discord.SelectOption(label="Wordchain", description="Wordchain game commands", emoji="🔤"),
             discord.SelectOption(label="AniList", description="Anime & Manga search", emoji="🎌"),
+            discord.SelectOption(label="AI Features", description="AI Persona configuration", emoji="🤖"),
             discord.SelectOption(label="Supporter", description="Commands for bot supporters", emoji="🌟"),
             discord.SelectOption(label="Admin", description="Server configuration & moderation", emoji="🛡️")
         ]
@@ -40,7 +42,7 @@ class HelpView(discord.ui.View):
         return True
 
     def generate_embed(self, category: str):
-        emojis = {"General": "📁", "Wordchain": "🔤", "AniList": "🎌", "Supporter": "🌟", "Admin": "🛡️"}
+        emojis = {"General": "📁", "Wordchain": "🔤", "AniList": "🎌", "AI Features": "🤖", "Supporter": "🌟", "Admin": "🛡️"}
         emoji = emojis.get(category, "📁")
         
         embed = discord.Embed(
@@ -111,7 +113,15 @@ class Help(commands.Cog):
     async def whatsnew_command(self, ctx: commands.Context):
         embed = discord.Embed(
             title="✨ What's New in Yuuri Bot?",
-            description="Here are the latest features and updates!\n\n• **Texting Triggers**: Now you can add a trigger respond depending on what people send using `/trigger add | list | remove` to manage and adding trigger!\n • **AniList Integration**: We now have AniList integration! Check out at `/anilist` to get a list of commands!\n • **Quote generator**: Make a quote out of someone message with the command `quote`! ",
+            description=(
+                "Here are the latest features and updates!\n\n"
+                "🤖 **AI Persona**: Admins can now activate and customize an AI chat persona using `/aiactivate`, `/aitoggle`, and `/aiprompt`!\n\n"
+                "💬 **Văn Mẫu (Copypasta)**: Fetch Vietnamese copypastas with the `/vanmau` command group! (random, get, search, categories).\n\n"
+                "🎞️ **GIF Maker**: Create your own GIFs directly in chat using the `y!gifmaker` command.\n\n"
+                "📜 **Texting Triggers**: Add custom auto-responses based on trigger words using the `/trigger` command group.\n\n"
+                "🎌 **AniList Integration**: Link your account and search anime/manga with `/anilist`.\n\n"
+                "🗣️ **Quote Generator**: Quote someone's message beautifully using `y!quote` or the `/quotes` slash command."
+            ),
             color=discord.Color.gold()
         )
         
