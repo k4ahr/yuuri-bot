@@ -344,5 +344,17 @@ class Admin(commands.Cog):
         
         await ctx.send(embed=embed, ephemeral=True)
 
+    @commands.command(name="sync", description="Sync slash commands (Owner only).")
+    @commands.is_owner()
+    async def sync_commands(self, ctx: commands.Context, guild_only: bool = False):
+        await ctx.typing()
+        if guild_only:
+            ctx.bot.tree.copy_global_to(guild=ctx.guild)
+            synced = await ctx.bot.tree.sync(guild=ctx.guild)
+            await ctx.send(f"Synced {len(synced)} commands locally to this server.")
+        else:
+            synced = await ctx.bot.tree.sync()
+            await ctx.send(f"Synced {len(synced)} commands globally.")
+
 async def setup(bot):
     await bot.add_cog(Admin(bot))

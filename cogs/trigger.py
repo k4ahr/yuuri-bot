@@ -87,23 +87,47 @@ class TriggerAddModal(discord.ui.Modal, title='Add New Trigger'):
         if not responses_list:
             return await interaction.response.send_message("You must provide at least one response.", ephemeral=True)
             
-        trigger_id = str(uuid.uuid4())
-        triggers[trigger_id] = {
-            "words": words_list,
-            "responses": responses_list,
-            "reply": self.reply
-        }
-        if whitelist_ids:
-            triggers[trigger_id]["whitelist"] = whitelist_ids
-        if blacklist_ids:
-            triggers[trigger_id]["blacklist"] = blacklist_ids
+        words_key = tuple(sorted(words_list))
+        existing_id = None
+        for t_id, data in triggers.items():
+            if tuple(sorted([w.lower() for w in data.get("words", [])])) == words_key:
+                existing_id = t_id
+                break
+                
+        if existing_id:
+            for resp in responses_list:
+                if resp not in triggers[existing_id]["responses"]:
+                    triggers[existing_id]["responses"].append(resp)
+            if whitelist_ids:
+                existing_wl = triggers[existing_id].setdefault("whitelist", [])
+                for w in whitelist_ids:
+                    if w not in existing_wl:
+                        existing_wl.append(w)
+            if blacklist_ids:
+                existing_bl = triggers[existing_id].setdefault("blacklist", [])
+                for b in blacklist_ids:
+                    if b not in existing_bl:
+                        existing_bl.append(b)
+            # Update reply preference to newest
+            triggers[existing_id]["reply"] = self.reply
+        else:
+            trigger_id = str(uuid.uuid4())
+            triggers[trigger_id] = {
+                "words": words_list,
+                "responses": responses_list,
+                "reply": self.reply
+            }
+            if whitelist_ids:
+                triggers[trigger_id]["whitelist"] = whitelist_ids
+            if blacklist_ids:
+                triggers[trigger_id]["blacklist"] = blacklist_ids
             
         await data_manager.set_server_config(interaction.guild_id, "triggers", triggers)
         
         reply_text = "Yes" if self.reply else "No"
         words_str = ", ".join([f"`{w}`" for w in words_list])
         
-        msg = f"Added trigger for {words_str} => {len(responses_list)} response(s). (Reply: {reply_text})"
+        msg = f"Added/Merged trigger for {words_str} => {len(responses_list)} new response(s). (Reply: {reply_text})"
         if whitelist_ids:
             msg += f"\n**Whitelist:** {len(whitelist_ids)} entries"
         if blacklist_ids:
@@ -117,6 +141,31 @@ class Trigger(commands.GroupCog, group_name="trigger", group_description="Manage
     def __init__(self, bot):
         self.bot = bot
         super().__init__()
+
+    async def cog_load(self):
+        # Run migration on all servers in the background when the cog loads
+        import asyncio
+        asyncio.create_task(self.run_global_migration())
+
+    async def run_global_migration(self):
+        import logging
+        logger = logging.getLogger('discord')
+        
+        async with data_manager.config_lock:
+            data = await data_manager._read_encrypted_config()
+            changed = False
+            for guild_id, guild_data in data.items():
+                triggers = guild_data.get("triggers", {})
+                if not triggers:
+                    continue
+                merged_triggers, migrated = self.migrate_triggers_if_needed(triggers)
+                if migrated:
+                    guild_data["triggers"] = merged_triggers
+                    changed = True
+            
+            if changed:
+                await data_manager._write_encrypted_config(data)
+                logger.info("Global trigger migration completed and saved successfully.")
 
     def migrate_triggers_if_needed(self, triggers: dict):
         migrated = False
@@ -139,7 +188,27 @@ class Trigger(commands.GroupCog, group_name="trigger", group_description="Manage
                     "responses": [resp],
                     "reply": reply
                 }
-        return new_triggers, migrated
+                
+        # Deduplication / Merging step
+        merged_triggers = {}
+        words_to_uuid = {}
+        
+        for t_id, data in new_triggers.items():
+            words_key = tuple(sorted([w.lower() for w in data.get("words", [])]))
+            
+            if words_key in words_to_uuid:
+                migrated = True
+                existing_id = words_to_uuid[words_key]
+                existing_data = merged_triggers[existing_id]
+                
+                for resp in data.get("responses", []):
+                    if resp not in existing_data["responses"]:
+                        existing_data["responses"].append(resp)
+            else:
+                words_to_uuid[words_key] = t_id
+                merged_triggers[t_id] = data
+                
+        return merged_triggers, migrated
 
     @app_commands.command(name="add", description="Add a new auto-reply trigger for the server.")
     @app_commands.describe(reply="True to reply to the user, False to send in channel.")
