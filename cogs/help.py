@@ -8,7 +8,7 @@ CATEGORIES = {
     "AniList": ["anilist", "allogin", "allogout", "alprofile", "alsearch", "alanime", "almanga", "alcharacter", "alstaff"],
     "General": ["safebooru", "gas", "help", "ping", "privacy", "whatsnew", "quote", "quotes", "gifmaker", "vanmau", "avatar", "banner", "no"],
     "Supporter": ["say", "addresponse", "listresponses", "removeresponse", "danbooru"],
-    "Admin": ["rolesconfig", "setlogchannel", "sethoneypot", "sethoneypotdm", "embedconfig", "botstats", "trigger", "sync"],
+    "Admin": ["rolesconfig", "setlogchannel", "sethoneypot", "sethoneypotdm", "embedconfig", "botstats", "trigger", "sync", "setprefix"],
     "AI Features": ["aiactivate", "aiprompt", "aitoggle"]
 }
 

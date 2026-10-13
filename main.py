@@ -6,8 +6,23 @@ import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from core.web_server import start_web_server
+from core.data_manager import data_manager
 
 load_dotenv()
+
+async def get_prefix(bot, message):
+    if not message.guild:
+        return commands.when_mentioned_or("y!", "Y!")(bot, message)
+    prefix = await data_manager.get_prefix(message.guild.id)
+    if prefix.lower() == "y!":
+        return commands.when_mentioned_or("y!", "Y!")(bot, message)
+    
+    prefixes = [prefix]
+    if prefix != prefix.lower():
+        prefixes.append(prefix.lower())
+    if prefix != prefix.upper():
+        prefixes.append(prefix.upper())
+    return commands.when_mentioned_or(*prefixes)(bot, message)
 
 def load_quotes():
     try:
@@ -24,7 +39,7 @@ class YuuriBot(commands.Bot):
         intents.message_content = True
         
         super().__init__(
-            command_prefix=("y!", "Y!"),
+            command_prefix=get_prefix,
             intents=intents,
             case_insensitive=True,
             help_command=None # Removed default help command

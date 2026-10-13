@@ -342,7 +342,39 @@ class Admin(commands.Cog):
         embed.add_field(name="Total Users", value=str(total_members), inline=True)
         embed.description = f"**Servers:**\n{guild_list}"
         
-        await ctx.send(embed=embed, ephemeral=True)
+    @commands.hybrid_command(name="setprefix", aliases=["prefix"], description="View or change the bot's command prefix for this server.")
+    @app_commands.describe(new_prefix="The new command prefix (max 5 chars), or 'reset' for default y! (Admins only)")
+    async def set_prefix_command(self, ctx: commands.Context, new_prefix: typing.Optional[str] = None):
+        if not ctx.guild:
+            return await ctx.send("Prefix configuration is only available in servers.", ephemeral=True)
+
+        current = await data_manager.get_prefix(ctx.guild.id)
+        
+        # If no new prefix provided, show current prefix
+        if new_prefix is None:
+            return await ctx.send(
+                f"ℹ️ The current command prefix for **{ctx.guild.name}** is `{current}`\n"
+                f"Admins can change it using `/setprefix <new_prefix>` or reset with `/setprefix reset`.",
+                ephemeral=True
+            )
+
+        # Modifying prefix requires admin or configured admin role
+        if not await is_admin_or_role(ctx):
+            return
+
+        clean_prefix = new_prefix.strip()
+        if clean_prefix.lower() in ("reset", "default"):
+            await data_manager.set_prefix(ctx.guild.id, "y!")
+            return await ctx.send("✅ Command prefix has been reset to default (`y!`).", ephemeral=True)
+
+        if len(clean_prefix) > 5:
+            return await ctx.send("❌ Prefix cannot be longer than 5 characters.", ephemeral=True)
+
+        if " " in clean_prefix:
+            return await ctx.send("❌ Prefix cannot contain spaces.", ephemeral=True)
+
+        await data_manager.set_prefix(ctx.guild.id, clean_prefix)
+        await ctx.send(f"✅ Command prefix for this server has been updated to `{clean_prefix}` (e.g. `{clean_prefix}help`).", ephemeral=True)
 
     @commands.command(name="sync", description="Sync slash commands (Owner only).")
     @commands.is_owner()

@@ -335,8 +335,9 @@ class Trigger(commands.GroupCog, group_name="trigger", group_description="Manage
                             raw_command = raw_command[1:].strip()
 
                         # Clone message with simulated command content
+                        prefix = await data_manager.get_prefix(message.guild.id) if message.guild else "y!"
                         new_message = copy.copy(message)
-                        new_message.content = f"y!{raw_command}"
+                        new_message.content = f"{prefix}{raw_command}"
                         
                         ctx = await self.bot.get_context(new_message)
                         if ctx.command:

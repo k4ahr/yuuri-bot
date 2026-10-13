@@ -15,6 +15,7 @@ class DataManager:
         self.config_lock = asyncio.Lock()
         self.noichu_lock = asyncio.Lock()
         self.users_lock = asyncio.Lock()
+        self.prefix_cache = {}
         
         self.encryption_key = os.getenv("ENCRYPTION_KEY")
         if self.encryption_key:
@@ -137,7 +138,22 @@ class DataManager:
             if guild_str not in data:
                 data[guild_str] = {}
             data[guild_str][key] = value
+            if key == "prefix":
+                self.prefix_cache[guild_str] = value
             await self._write_encrypted_config(data)
+
+    async def get_prefix(self, guild_id):
+        guild_str = str(guild_id)
+        if guild_str in self.prefix_cache:
+            return self.prefix_cache[guild_str]
+
+        config = await self.get_server_config(guild_id)
+        prefix = config.get("prefix", "y!")
+        self.prefix_cache[guild_str] = prefix
+        return prefix
+
+    async def set_prefix(self, guild_id, prefix: str):
+        await self.set_server_config(guild_id, "prefix", prefix)
 
     async def get_user_data(self, user_id):
         async with self.users_lock:
