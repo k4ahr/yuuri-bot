@@ -6,7 +6,7 @@ from discord.ext import commands
 class No(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        self.api_url = os.getenv("NO_API_URL", "http://localhost:3000/no")
+        self.api_url = os.getenv("NO_AS_A_SERVICE")
 
     @commands.hybrid_command(name="no", description="Get a reason to say no.")
     async def no_command(self, ctx: commands.Context):
