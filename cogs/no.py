@@ -11,6 +11,9 @@ class No(commands.Cog):
     @commands.hybrid_command(name="no", description="Get a reason to say no.")
     async def no_command(self, ctx: commands.Context):
         await ctx.defer()
+        if not self.api_url:
+            await ctx.send("NO_AS_A_SERVICE URL is not configured in .env")
+            return
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(self.api_url, timeout=10) as resp:

@@ -6,6 +6,7 @@ from cogs.admin import is_admin_or_role
 import re
 import random
 import uuid
+import copy
 
 class TriggerPaginationView(discord.ui.View):
     def __init__(self, embeds: list[discord.Embed]):
@@ -41,7 +42,7 @@ class TriggerAddModal(discord.ui.Modal, title='Add New Trigger'):
     responses = discord.ui.TextInput(
         label='Responses (one per line)',
         style=discord.TextStyle.paragraph,
-        placeholder='Enter responses, one per line. Paste Image URLs directly.',
+        placeholder='Enter responses, one per line. Use \\run!command (e.g. \\run!help) to run bot commands.',
         required=True
     )
     whitelist = discord.ui.TextInput(
@@ -324,10 +325,48 @@ class Trigger(commands.GroupCog, group_name="trigger", group_description="Manage
                     response_text = random.choice(responses)
                     should_reply = data.get("reply", False)
                     
-                    if should_reply:
-                        await message.reply(response_text)
+                    # Check if response is a command execution prefix (\run! or /run!)
+                    if response_text.startswith(("\\run!", "/run!")):
+                        prefix_len = len("\\run!") if response_text.startswith("\\run!") else len("/run!")
+                        raw_command = response_text[prefix_len:].strip()
+                        if raw_command.startswith(("y!", "Y!")):
+                            raw_command = raw_command[2:].strip()
+                        elif raw_command.startswith("/"):
+                            raw_command = raw_command[1:].strip()
+
+                        # Clone message with simulated command content
+                        new_message = copy.copy(message)
+                        new_message.content = f"y!{raw_command}"
+                        
+                        ctx = await self.bot.get_context(new_message)
+                        if ctx.command:
+                            if should_reply:
+                                orig_send = ctx.send
+                                async def send_with_reply(*args, **kwargs):
+                                    kwargs.setdefault('reference', message.to_reference(fail_if_not_exists=False))
+                                    kwargs.setdefault('mention_author', False)
+                                    return await orig_send(*args, **kwargs)
+                                ctx.send = send_with_reply
+
+                            try:
+                                await self.bot.invoke(ctx)
+                            except Exception as e:
+                                error_msg = f"Error running command `{raw_command}`: {e}"
+                                if should_reply:
+                                    await message.reply(error_msg)
+                                else:
+                                    await message.channel.send(error_msg)
+                        else:
+                            error_msg = f"Command `{raw_command}` not found."
+                            if should_reply:
+                                await message.reply(error_msg)
+                            else:
+                                await message.channel.send(error_msg)
                     else:
-                        await message.channel.send(response_text)
+                        if should_reply:
+                            await message.reply(response_text)
+                        else:
+                            await message.channel.send(response_text)
                     break
 
 async def setup(bot):
