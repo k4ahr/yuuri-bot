@@ -495,10 +495,11 @@ class GifMakerCog(commands.Cog):
                 img = Image.open(io.BytesIO(b))
                 frames = []
                 durations = []
+                target_mode = 'RGB' if fmt == 'GIF' else 'RGBA'
                 for frame in ImageSequence.Iterator(img):
                     f = frame.copy()
-                    if f.mode != 'RGBA':
-                        f = f.convert('RGBA')
+                    if f.mode != target_mode:
+                        f = f.convert(target_mode)
                     frames.append(f)
                     durations.append(frame.info.get('duration', 100))
                 
@@ -515,6 +516,7 @@ class GifMakerCog(commands.Cog):
                     save_kwargs['method'] = 6
                 elif fmt == 'GIF':
                     save_kwargs['disposal'] = 2
+                    save_kwargs['optimize'] = False
                 
                 if len(frames) == 1:
                     frames.append(frames[0].copy())
