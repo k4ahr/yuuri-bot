@@ -9,7 +9,7 @@
 * Data encryption
 * String triggers
 * Word chains/Dictionary search
-* Auto embed fixers for multiple platforms (Facebook, Twitter/X, TikTok, Instagram, pixiv, AniList)
+* Auto embed fixers for multiple platforms (Facebook, Twitter/X, TikTok, Instagram, pixiv, AniList, Reddit, Threads, Spotify)
 * AniList integration  
 * *More to be added in the future*
 

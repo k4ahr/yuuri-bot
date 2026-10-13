@@ -6,7 +6,7 @@ import os
 CATEGORIES = {
     "Wordchain": ["setnoichu", "ncreset", "nclb", "ncrank", "nccount", "define"],
     "AniList": ["anilist", "allogin", "allogout", "alprofile", "alsearch", "alanime", "almanga", "alcharacter", "alstaff"],
-    "General": ["safebooru", "gas", "help", "ping", "privacy", "whatsnew", "quote", "quotes", "gifmaker", "vanmau"],
+    "General": ["safebooru", "gas", "help", "ping", "privacy", "whatsnew", "quote", "quotes", "gifmaker", "vanmau", "avatar", "banner"],
     "Supporter": ["say", "addresponse", "listresponses", "removeresponse", "danbooru"],
     "Admin": ["rolesconfig", "setlogchannel", "sethoneypot", "sethoneypotdm", "embedconfig", "botstats", "trigger", "sync"],
     "AI Features": ["aiactivate", "aiprompt", "aitoggle"]

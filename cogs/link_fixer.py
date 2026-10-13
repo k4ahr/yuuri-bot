@@ -37,10 +37,14 @@ PLATFORM_MAP = {
     'threads': {
         'domains': ['threads.net', 'www.threads.net', 'threads.com', 'www.threads.com'],
         'replace': 'vxthreads.com'
+    },
+    'spotify': {
+        'domains': ['open.spotify.com'],
+        'replace': 'open.spqtify.com'
     }
 }
 
-NORMAL_PLATFORMS = ['twitter', 'tiktok', 'instagram', 'pixiv', 'anilist', 'reddit', 'threads']
+NORMAL_PLATFORMS = ['twitter', 'tiktok', 'instagram', 'pixiv', 'anilist', 'reddit', 'threads', 'spotify']
 EXPERIMENTAL_PLATFORMS = ['facebook']
 
 class EmbedConfigView(discord.ui.View):
