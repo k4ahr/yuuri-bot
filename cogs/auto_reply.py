@@ -14,6 +14,11 @@ class AutoReply(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.cooldowns = {}
+        # Track message IDs that were AI-generated responses so we only
+        # continue the conversation when a user replies to an AI message,
+        # not to trigger/command/link-fixer messages.
+        self.ai_message_ids: set[int] = set()
+        self._AI_MSG_ID_LIMIT = 5000  # cap to prevent unbounded memory growth
         
         # Initialize Gemini API
         api_key = os.getenv("GEMINI_API_KEY")
@@ -113,89 +118,98 @@ class AutoReply(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
-        # Check if the bot is mentioned
-        if self.bot.user in message.mentions:
-            # Check if this is an accidental reply to an embed fixer message
-            if message.reference and message.reference.message_id:
-                try:
-                    ref_msg = message.reference.resolved
-                    if not ref_msg or isinstance(ref_msg, discord.DeletedReferencedMessage):
-                        ref_msg = await message.channel.fetch_message(message.reference.message_id)
-                        
-                    if ref_msg and ref_msg.author.id == self.bot.user.id:
-                        # Link fixer formats messages like "[Platform Post](url)"
-                        if "Post](" in ref_msg.content:
-                            return
-                except Exception:
-                    pass
+        is_mentioned = self.bot.user in message.mentions
+        is_reply_to_ai = False
 
-            config = await data_manager.get_server_config(message.guild.id)
-            ai_activated = config.get("ai_activated", False)
-            ai_enabled = config.get("ai_enabled", True)
-            
-            if not ai_activated or not ai_enabled:
-                # Use old fixed responses
-                responses = config.get("mention_responses", [])
-                if responses:
-                    await message.reply(random.choice(responses))
-                else:
-                    await message.reply("Hello! My AI features are currently locked. An admin needs to activate them.")
+        # Check if this is a reply to one of the bot's AI-generated messages
+        if message.reference and message.reference.message_id:
+            ref_id = message.reference.message_id
+            if ref_id in self.ai_message_ids:
+                is_reply_to_ai = True
+
+        if not is_mentioned and not is_reply_to_ai:
+            return
+
+        config = await data_manager.get_server_config(message.guild.id)
+        ai_activated = config.get("ai_activated", False)
+        ai_enabled = config.get("ai_enabled", True)
+
+        if not ai_activated or not ai_enabled:
+            # Use old fixed responses
+            responses = config.get("mention_responses", [])
+            if responses:
+                await message.reply(random.choice(responses))
+            else:
+                await message.reply("Hello! My AI features are currently locked. An admin needs to activate them.")
+            return
+
+        if not self.client:
+            await message.reply("My bwain is missing its API key... I can't thwink wight now, pwease tell master to check the .env file~")
+            return
+
+        user_id = message.author.id
+        current_time = time.time()
+        
+        # Check 15-second cooldown
+        if user_id in self.cooldowns:
+            if current_time - self.cooldowns[user_id] < 15:
                 return
+        
+        self.cooldowns[user_id] = current_time
 
-            if not self.client:
-                await message.reply("My bwain is missing its API key... I can't thwink wight now, pwease tell master to check the .env file~")
-                return
+        system_prompt = config.get("ai_system_prompt", self.default_system_prompt)
 
-            user_id = message.author.id
-            current_time = time.time()
-            
-            # Check 15-second cooldown
-            if user_id in self.cooldowns:
-                if current_time - self.cooldowns[user_id] < 15:
-                    return
-            
-            self.cooldowns[user_id] = current_time
-
-            system_prompt = config.get("ai_system_prompt", self.default_system_prompt)
-
-            async with message.channel.typing():
-                try:
-                    # Fetch last 50 messages for context
-                    history = [msg async for msg in message.channel.history(limit=100, before=message)]
-                    history.reverse() # Oldest to newest
+        async with message.channel.typing():
+            try:
+                # Fetch last 50 messages for context
+                history = [msg async for msg in message.channel.history(limit=100, before=message)]
+                history.reverse() # Oldest to newest
+                
+                conversation = []
+                for msg in history:
+                    if not msg.content:
+                        continue
+                    user_name = "Yuuri" if msg.author.id == self.bot.user.id else msg.author.display_name
+                    conversation.append(f"{user_name}: {msg.clean_content}")
                     
-                    conversation = []
-                    for msg in history:
-                        if not msg.content:
-                            continue
-                        user_name = "Yuuri" if msg.author.id == self.bot.user.id else msg.author.display_name
-                        conversation.append(f"{user_name}: {msg.clean_content}")
-                        
-                    conversation.append(f"{message.author.display_name}: {message.clean_content}")
-                    
-                    context_text = "\n".join(conversation[-50:])
-                    
-                    prompt = f"Here is the recent chat history:\n{context_text}\n\nYuuri:"
-                    
-                    # Run generation in executor to not block async loop
-                    response = await asyncio.to_thread(
-                        self.client.models.generate_content,
-                        model='gemini-3.5-flash-lite',
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            system_instruction=system_prompt,
-                            temperature=0.9,
-                            max_output_tokens=300,
-                        )
+                conversation.append(f"{message.author.display_name}: {message.clean_content}")
+                
+                context_text = "\n".join(conversation[-50:])
+                
+                prompt = f"Here is the recent chat history:\n{context_text}\n\nYuuri:"
+                
+                # Run generation in executor to not block async loop
+                response = await asyncio.to_thread(
+                    self.client.models.generate_content,
+                    model='gemini-3.5-flash-lite',
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=0.9,
+                        max_output_tokens=300,
                     )
-                    
-                    if response.text:
-                        await message.reply(response.text)
-                    else:
-                        await message.reply("My bwain went empty... wha did you say? uwu")
-                except Exception as e:
-                    print(f"Error generating AI reply: {e}")
-                    await message.reply("Oh noes... something dweadful happened to my bwain... I can't weply right now! T^T")
+                )
+                
+                if response.text:
+                    sent = await message.reply(response.text)
+                    self._track_ai_message(sent.id)
+                else:
+                    sent = await message.reply("My bwain went empty... wha did you say? uwu")
+                    self._track_ai_message(sent.id)
+            except Exception as e:
+                print(f"Error generating AI reply: {e}")
+                await message.reply("Oh noes... something dweadful happened to my bwain... I can't weply right now! T^T")
+
+    def _track_ai_message(self, message_id: int):
+        """Store an AI-generated message ID, evicting oldest entries if over the limit."""
+        self.ai_message_ids.add(message_id)
+        # Evict oldest entries when the set grows too large
+        if len(self.ai_message_ids) > self._AI_MSG_ID_LIMIT:
+            # Message IDs are snowflakes (monotonically increasing), so
+            # removing the smallest values drops the oldest messages.
+            sorted_ids = sorted(self.ai_message_ids)
+            for old_id in sorted_ids[:len(sorted_ids) - self._AI_MSG_ID_LIMIT]:
+                self.ai_message_ids.discard(old_id)
 
 async def setup(bot):
     await bot.add_cog(AutoReply(bot))
