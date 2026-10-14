@@ -10,7 +10,10 @@
 * String triggers
 * Word chains/Dictionary search
 * Auto embed fixers for multiple platforms (Facebook, Twitter/X, TikTok, Instagram, pixiv, AniList, Reddit, Threads, Spotify)
-* AniList integration  
+* AniList integration
+* Copypasta search
+* Quote/GIF image maker
+* [no-as-a-service](https://github.com/hotheadhacker/no-as-a-service/)
 * *More to be added in the future*
 
 
