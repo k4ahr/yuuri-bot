@@ -342,6 +342,8 @@ class Admin(commands.Cog):
         embed.add_field(name="Total Users", value=str(total_members), inline=True)
         embed.description = f"**Servers:**\n{guild_list}"
         
+        await ctx.send(embed=embed)
+        
     @commands.hybrid_command(name="setprefix", aliases=["prefix"], description="View or change the bot's command prefix for this server.")
     @app_commands.describe(new_prefix="The new command prefix (max 5 chars), or 'reset' for default y! (Admins only)")
     async def set_prefix_command(self, ctx: commands.Context, new_prefix: typing.Optional[str] = None):
