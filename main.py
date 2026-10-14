@@ -94,4 +94,4 @@ if __name__ == "__main__":
     if not token:
         logger.error("DISCORD_TOKEN not found in environment variables.")
         exit(1)
-    bot.run(token)
+    bot.run(token, log_handler=None)

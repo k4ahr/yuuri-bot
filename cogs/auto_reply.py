@@ -118,7 +118,10 @@ class AutoReply(commands.Cog):
         if message.author.bot or not message.guild:
             return
 
-        is_mentioned = self.bot.user in message.mentions
+        # Check if the bot is explicitly @mentioned in the message text
+        # (not just from Discord's reply ping, which also adds to message.mentions)
+        bot_mention_strings = [f"<@{self.bot.user.id}>", f"<@!{self.bot.user.id}>"]
+        is_mentioned = any(m in message.content for m in bot_mention_strings)
         is_reply_to_ai = False
 
         # Check if this is a reply to one of the bot's AI-generated messages
