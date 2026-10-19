@@ -4,7 +4,7 @@
 
 # Current functions
 * A honeypot channel setup to autoban spammers/bot accounts
-* Showing newest gas price in Vietnam
+* Showing newest gas price in multiple countries
 * Safebooru image search
 * Data encryption
 * String triggers
