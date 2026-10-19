@@ -14,11 +14,13 @@ class AutoReply(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
         self.cooldowns = {}
-        # Track message IDs that were AI-generated responses so we only
-        # continue the conversation when a user replies to an AI message,
+        # Track message IDs that were auto-reply responses (both AI and fixed)
+        # so we only continue the conversation when a user replies to an auto-reply message,
         # not to trigger/command/link-fixer messages.
-        self.ai_message_ids: set[int] = set()
-        self._AI_MSG_ID_LIMIT = 5000  # cap to prevent unbounded memory growth
+        self.auto_reply_message_ids: set[int] = set()
+        self.ai_message_ids = self.auto_reply_message_ids  # alias for backward compatibility
+        self._MSG_ID_LIMIT = 5000  # cap to prevent unbounded memory growth
+        self._AI_MSG_ID_LIMIT = self._MSG_ID_LIMIT
         
         # Initialize Gemini API
         api_key = os.getenv("GEMINI_API_KEY")
@@ -122,15 +124,25 @@ class AutoReply(commands.Cog):
         # (not just from Discord's reply ping, which also adds to message.mentions)
         bot_mention_strings = [f"<@{self.bot.user.id}>", f"<@!{self.bot.user.id}>"]
         is_mentioned = any(m in message.content for m in bot_mention_strings)
-        is_reply_to_ai = False
+        is_reply_to_auto_reply = False
 
-        # Check if this is a reply to one of the bot's AI-generated messages
+        # Check if this is a reply to one of the bot's auto-reply messages
         if message.reference and message.reference.message_id:
             ref_id = message.reference.message_id
-            if ref_id in self.ai_message_ids:
-                is_reply_to_ai = True
+            if ref_id in self.auto_reply_message_ids:
+                is_reply_to_auto_reply = True
+            else:
+                # Check resolved reference (e.g. after bot restart) if available
+                ref_msg = message.reference.resolved
+                if ref_msg and isinstance(ref_msg, discord.Message) and ref_msg.author.id == self.bot.user.id:
+                    config = await data_manager.get_server_config(message.guild.id)
+                    mention_responses = config.get("mention_responses", [])
+                    locked_msg = "Hello! My AI features are currently locked. An admin needs to activate them."
+                    if ref_msg.content in mention_responses or ref_msg.content == locked_msg:
+                        is_reply_to_auto_reply = True
+                        self._track_auto_reply_message(ref_id)
 
-        if not is_mentioned and not is_reply_to_ai:
+        if not is_mentioned and not is_reply_to_auto_reply:
             return
 
         config = await data_manager.get_server_config(message.guild.id)
@@ -141,13 +153,15 @@ class AutoReply(commands.Cog):
             # Use old fixed responses
             responses = config.get("mention_responses", [])
             if responses:
-                await message.reply(random.choice(responses))
+                sent = await message.reply(random.choice(responses))
             else:
-                await message.reply("Hello! My AI features are currently locked. An admin needs to activate them.")
+                sent = await message.reply("Hello! My AI features are currently locked. An admin needs to activate them.")
+            self._track_auto_reply_message(sent.id)
             return
 
         if not self.client:
-            await message.reply("My bwain is missing its API key... I can't thwink wight now, pwease tell master to check the .env file~")
+            sent = await message.reply("My bwain is missing its API key... I can't thwink wight now, pwease tell master to check the .env file~")
+            self._track_auto_reply_message(sent.id)
             return
 
         user_id = message.author.id
@@ -195,24 +209,29 @@ class AutoReply(commands.Cog):
                 
                 if response.text:
                     sent = await message.reply(response.text)
-                    self._track_ai_message(sent.id)
+                    self._track_auto_reply_message(sent.id)
                 else:
                     sent = await message.reply("My bwain went empty... wha did you say? uwu")
-                    self._track_ai_message(sent.id)
+                    self._track_auto_reply_message(sent.id)
             except Exception as e:
                 print(f"Error generating AI reply: {e}")
-                await message.reply("Oh noes... something dweadful happened to my bwain... I can't weply right now! T^T")
+                sent = await message.reply("Oh noes... something dweadful happened to my bwain... I can't weply right now! T^T")
+                self._track_auto_reply_message(sent.id)
 
-    def _track_ai_message(self, message_id: int):
-        """Store an AI-generated message ID, evicting oldest entries if over the limit."""
-        self.ai_message_ids.add(message_id)
+    def _track_auto_reply_message(self, message_id: int):
+        """Store an auto-reply message ID, evicting oldest entries if over the limit."""
+        self.auto_reply_message_ids.add(message_id)
         # Evict oldest entries when the set grows too large
-        if len(self.ai_message_ids) > self._AI_MSG_ID_LIMIT:
+        if len(self.auto_reply_message_ids) > self._MSG_ID_LIMIT:
             # Message IDs are snowflakes (monotonically increasing), so
             # removing the smallest values drops the oldest messages.
-            sorted_ids = sorted(self.ai_message_ids)
-            for old_id in sorted_ids[:len(sorted_ids) - self._AI_MSG_ID_LIMIT]:
-                self.ai_message_ids.discard(old_id)
+            sorted_ids = sorted(self.auto_reply_message_ids)
+            for old_id in sorted_ids[:len(sorted_ids) - self._MSG_ID_LIMIT]:
+                self.auto_reply_message_ids.discard(old_id)
+
+    def _track_ai_message(self, message_id: int):
+        """Backward-compatible alias for _track_auto_reply_message."""
+        self._track_auto_reply_message(message_id)
 
 async def setup(bot):
     await bot.add_cog(AutoReply(bot))
