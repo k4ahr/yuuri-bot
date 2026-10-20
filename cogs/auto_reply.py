@@ -200,7 +200,7 @@ class AutoReply(commands.Cog):
                 prompt = f"Here is the recent chat history:\n{context_text}\n\nYuuri:"
                 
                 # Run generation in executor to not block async loop
-                model_name = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+                model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
                 print(f"DEBUG: Using model={model_name}, client={self.client is not None}, api_key_present={bool(self.client._api_client.api_key) if self.client else False}")
                 response = await asyncio.to_thread(
                     self.client.models.generate_content,
@@ -210,6 +210,7 @@ class AutoReply(commands.Cog):
                         system_instruction=system_prompt,
                         temperature=0.9,
                         max_output_tokens=300,
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                     )
                 )
                 
