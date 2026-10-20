@@ -2,9 +2,22 @@ import discord
 from discord.ext import commands
 import io
 import os
+import re
+import hashlib
 import textwrap
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 import asyncio
+
+def sanitize_filename(name: str) -> str:
+    if not name:
+        return ""
+    # Strip any trailing extension if provided (.gif, .webp, etc)
+    name = re.sub(r'\.(gif|webp|png|jpg|jpeg|mp4|mov|webm)$', '', name.strip(), flags=re.IGNORECASE)
+    # Remove characters that are not allowed or problematic in filenames
+    name = re.sub(r'[\\/*?:"<>|]', '', name).strip()
+    # Normalize spaces/hyphens to underscores
+    name = re.sub(r'[-\s]+', '_', name)
+    return name[:64]
 
 class InitialFormatSelectView(discord.ui.View):
     def __init__(self, ctx):
@@ -77,18 +90,23 @@ class BubbleSelectViewInternal(discord.ui.View):
         self.stop()
 
 class GifMakerView(discord.ui.View):
-    def __init__(self, ctx, initial_bytes, initial_format='webp', is_video=False):
+    def __init__(self, ctx, initial_bytes, initial_format='webp', is_video=False, filename_base='output'):
         super().__init__(timeout=600)
         self.ctx = ctx
         self.history = [initial_bytes]
         self.current_format = initial_format
         self.is_video = is_video
+        self.filename_base = filename_base
         
+    @property
+    def output_filename(self):
+        return f"{self.filename_base}.{self.current_format}"
+
     async def update_message(self, interaction):
         if not self.history:
             return
         current_bytes = self.history[-1]
-        file = discord.File(io.BytesIO(current_bytes), filename=f"output.{self.current_format}")
+        file = discord.File(io.BytesIO(current_bytes), filename=self.output_filename)
         await interaction.message.edit(attachments=[file], view=self)
 
     @discord.ui.select(
@@ -100,6 +118,7 @@ class GifMakerView(discord.ui.View):
             discord.SelectOption(label="Optimize gif", value="optimize", description="Optimize the gif"),
             discord.SelectOption(label="Convert to", value="convert_format", description="Change output format"),
             discord.SelectOption(label="Add whitebox caption", value="caption", description="Add a whitebox caption on top"),
+            discord.SelectOption(label="Rename file", value="rename", description="Change the output file name"),
             discord.SelectOption(label="Undo", value="undo", description="Revert last change")
         ]
     )
@@ -131,6 +150,11 @@ class GifMakerView(discord.ui.View):
             modal = ResizeModal(self)
             await interaction.response.send_modal(modal)
             return
+
+        elif action == "rename":
+            modal = RenameModal(self)
+            await interaction.response.send_modal(modal)
+            return
             
         elif action == "bubble":
             embed = discord.Embed(description="Choose the bubble direction:")
@@ -141,7 +165,7 @@ class GifMakerView(discord.ui.View):
                 msg = await interaction.message.channel.send("Adding bubble...", delete_after=3)
                 await self.process_image_action("bubble", direction=view.bubble_chosen)
                 await interaction.message.edit(
-                    attachments=[discord.File(io.BytesIO(self.history[-1]), filename=f"output.{self.current_format}")], 
+                    attachments=[discord.File(io.BytesIO(self.history[-1]), filename=self.output_filename)], 
                     view=self
                 )
             return
@@ -160,7 +184,7 @@ class GifMakerView(discord.ui.View):
                 msg = await interaction.message.channel.send("Converting format...", delete_after=3)
                 await self.process_image_action("convert_format", format=view.format_chosen)
                 await interaction.message.edit(
-                    attachments=[discord.File(io.BytesIO(self.history[-1]), filename=f"output.{self.current_format}")], 
+                    attachments=[discord.File(io.BytesIO(self.history[-1]), filename=self.output_filename)], 
                     view=self
                 )
             return
@@ -367,13 +391,35 @@ class ResizeModal(discord.ui.Modal, title='Reduce Resolution'):
         await self.view.process_image_action("resize", percentage=pct)
         await self.view.update_message(interaction)
 
+class RenameModal(discord.ui.Modal, title='Rename Output File'):
+    file_name = discord.ui.TextInput(
+        label='File name (without extension)',
+        style=discord.TextStyle.short,
+        placeholder='Enter file name...',
+        max_length=64,
+        required=True
+    )
+
+    def __init__(self, view):
+        super().__init__()
+        self.view = view
+        self.file_name.default = self.view.filename_base
+
+    async def on_submit(self, interaction: discord.Interaction):
+        clean_name = sanitize_filename(self.file_name.value)
+        if not clean_name:
+            return await interaction.response.send_message("Invalid file name. Please use valid characters.", ephemeral=True)
+            
+        self.view.filename_base = clean_name
+        await interaction.response.defer()
+        await self.view.update_message(interaction)
 
 class GifMakerCog(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
     @commands.command(name="gifmaker", aliases=["gm"])
-    async def gifmaker(self, ctx):
+    async def gifmaker(self, ctx, *, filename: str = None):
         attachment = None
         if ctx.message.attachments:
             attachment = ctx.message.attachments[0]
@@ -384,12 +430,12 @@ class GifMakerCog(commands.Cog):
                 
         img_bytes = None
         content_type = ""
-        filename = ""
+        media_filename = ""
 
         if attachment:
             img_bytes = await attachment.read()
             content_type = (attachment.content_type or '').lower()
-            filename = attachment.filename.lower()
+            media_filename = attachment.filename.lower()
         else:
             if ctx.message.reference and hasattr(ctx.message.reference.resolved, 'embeds'):
                 ref_msg = ctx.message.reference.resolved
@@ -410,13 +456,32 @@ class GifMakerCog(commands.Cog):
                                 if resp.status == 200:
                                     img_bytes = await resp.read()
                                     content_type = resp.headers.get('content-type', '').lower()
-                                    filename = url.split('/')[-1].split('?')[0].lower()
+                                    media_filename = url.split('/')[-1].split('?')[0].lower()
+
+        custom_name = None
+        if filename:
+            if filename.startswith(('http://', 'https://')):
+                if not img_bytes:
+                    import aiohttp
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(filename) as resp:
+                            if resp.status == 200:
+                                img_bytes = await resp.read()
+                                content_type = resp.headers.get('content-type', '').lower()
+                                media_filename = filename.split('/')[-1].split('?')[0].lower()
+            else:
+                custom_name = filename
             
         if not img_bytes:
             return await ctx.send("Please attach an image/video, reply to a message containing one, or reply to a link containing media.")
-            
+
+        # Build name from custom name or hash of original imported image/video bytes
+        original_hash = hashlib.md5(img_bytes).hexdigest()
+        clean_name = sanitize_filename(custom_name) if custom_name else ""
+        filename_base = clean_name if clean_name else original_hash
+
         is_video = False
-        if content_type.startswith('video/') or filename.endswith(('.mp4', '.mov', '.webm', '.mkv', '.avi')):
+        if content_type.startswith('video/') or media_filename.endswith(('.mp4', '.mov', '.webm', '.mkv', '.avi')):
             is_video = True
                 
         if is_video:
@@ -495,6 +560,7 @@ class GifMakerCog(commands.Cog):
                 img = Image.open(io.BytesIO(b))
                 frames = []
                 durations = []
+                fmt = target_fmt.upper()
                 target_mode = 'RGB' if fmt == 'GIF' else 'RGBA'
                 for frame in ImageSequence.Iterator(img):
                     f = frame.copy()
@@ -504,7 +570,6 @@ class GifMakerCog(commands.Cog):
                     durations.append(frame.info.get('duration', 100))
                 
                 out = io.BytesIO()
-                fmt = target_fmt.upper()
                 save_kwargs = {
                     'format': fmt,
                     'save_all': True,
@@ -543,8 +608,8 @@ class GifMakerCog(commands.Cog):
             else:
                 return await ctx.send(msg_content)
             
-        view = GifMakerView(ctx, img_bytes, initial_format=chosen_fmt, is_video=is_video)
-        file = discord.File(io.BytesIO(img_bytes), filename=f"output.{chosen_fmt}")
+        view = GifMakerView(ctx, img_bytes, initial_format=chosen_fmt, is_video=is_video, filename_base=filename_base)
+        file = discord.File(io.BytesIO(img_bytes), filename=view.output_filename)
         if prompt_msg:
             await prompt_msg.delete()
         await ctx.send("Gif Maker loaded:", file=file, view=view)
