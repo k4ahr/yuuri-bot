@@ -27,6 +27,7 @@ class AutoReply(commands.Cog):
         
         # Initialize Gemini API
         api_key = (os.getenv("GEMINI_API_KEY") or "").strip().strip("\"'")
+        print(f"DEBUG: GEMINI_API_KEY loaded, length={len(api_key)}, prefix={api_key[:4] if api_key else 'NONE'}")
         if api_key:
             self.client = genai.Client(api_key=api_key)
         else:
@@ -200,6 +201,7 @@ class AutoReply(commands.Cog):
                 
                 # Run generation in executor to not block async loop
                 model_name = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
+                print(f"DEBUG: Using model={model_name}, client={self.client is not None}, api_key_present={bool(self.client._api_client.api_key) if self.client else False}")
                 response = await asyncio.to_thread(
                     self.client.models.generate_content,
                     model=model_name,
@@ -218,6 +220,8 @@ class AutoReply(commands.Cog):
                     sent = await message.reply("My bwain went empty... wha did you say? uwu")
                     self._track_auto_reply_message(sent.id)
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 print(f"Error generating AI reply: {e}")
                 sent = await message.reply("Oh noes... something dweadful happened to my bwain... I can't weply right now! T^T")
                 self._track_auto_reply_message(sent.id)
