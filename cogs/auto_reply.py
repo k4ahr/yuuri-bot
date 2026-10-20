@@ -199,26 +199,55 @@ class AutoReply(commands.Cog):
                 
                 prompt = f"Here is the recent chat history:\n{context_text}\n\nYuuri:"
                 
-                # Run generation in executor to not block async loop
-                model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
-                print(f"DEBUG: Using model={model_name}, client={self.client is not None}, api_key_present={bool(self.client._api_client.api_key) if self.client else False}")
-                response = await asyncio.to_thread(
-                    self.client.models.generate_content,
-                    model=model_name,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        system_instruction=system_prompt,
-                        temperature=0.9,
-                        max_output_tokens=300,
-                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-                    )
+                # Model fallback chain for resilience against 503 demand spikes
+                primary_model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+                fallback_models = [primary_model, "gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"]
+                # Deduplicate while preserving order
+                seen = set()
+                models_to_try = []
+                for m in fallback_models:
+                    if m not in seen:
+                        seen.add(m)
+                        models_to_try.append(m)
+
+                gen_config = types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.9,
+                    max_output_tokens=300,
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                 )
-                
-                if response.text:
+
+                response = None
+                last_error = None
+                for model_name in models_to_try:
+                    try:
+                        print(f"Trying model={model_name}...")
+                        response = await asyncio.to_thread(
+                            self.client.models.generate_content,
+                            model=model_name,
+                            contents=prompt,
+                            config=gen_config,
+                        )
+                        break  # Success, stop trying
+                    except Exception as model_err:
+                        last_error = model_err
+                        err_str = str(model_err)
+                        if "503" in err_str or "UNAVAILABLE" in err_str or "504" in err_str or "DEADLINE_EXCEEDED" in err_str:
+                            print(f"Model {model_name} unavailable, trying next fallback...")
+                            continue
+                        else:
+                            raise  # Non-transient error, don't retry
+
+                if response and response.text:
                     sent = await message.reply(response.text)
                     self._track_auto_reply_message(sent.id)
-                else:
+                elif response:
                     sent = await message.reply("My bwain went empty... wha did you say? uwu")
+                    self._track_auto_reply_message(sent.id)
+                else:
+                    # All models failed
+                    print(f"All models exhausted. Last error: {last_error}")
+                    sent = await message.reply("All my bwain cells are overloaded right now... try again in a bit! (´;ω;`)")
                     self._track_auto_reply_message(sent.id)
             except Exception as e:
                 import traceback
