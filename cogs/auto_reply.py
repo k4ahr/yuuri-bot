@@ -198,7 +198,7 @@ class AutoReply(commands.Cog):
                 # Run generation in executor to not block async loop
                 response = await asyncio.to_thread(
                     self.client.models.generate_content,
-                    model='gemini-3.5-flash-lite',
+                    model='gemini-3-flash-preview',
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         system_instruction=system_prompt,
