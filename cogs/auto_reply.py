@@ -3,12 +3,15 @@ from discord import app_commands
 from discord.ext import commands
 import os
 import random
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 import time
 import asyncio
 from core.data_manager import data_manager
 from cogs.admin import is_admin_or_role
+
+load_dotenv()
 
 class AutoReply(commands.Cog):
     def __init__(self, bot):
@@ -23,7 +26,7 @@ class AutoReply(commands.Cog):
         self._AI_MSG_ID_LIMIT = self._MSG_ID_LIMIT
         
         # Initialize Gemini API
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = (os.getenv("GEMINI_API_KEY") or "").strip().strip("\"'")
         if api_key:
             self.client = genai.Client(api_key=api_key)
         else:
@@ -196,9 +199,10 @@ class AutoReply(commands.Cog):
                 prompt = f"Here is the recent chat history:\n{context_text}\n\nYuuri:"
                 
                 # Run generation in executor to not block async loop
+                model_name = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
                 response = await asyncio.to_thread(
                     self.client.models.generate_content,
-                    model='gemini-3-flash-preview',
+                    model=model_name,
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         system_instruction=system_prompt,
