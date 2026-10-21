@@ -12,7 +12,7 @@ URL_REGEX = r'(https?://[^\s]+)'
 PLATFORM_MAP = {
     'twitter': {
         'domains': ['twitter.com', 'www.twitter.com', 'x.com', 'www.x.com'],
-        'replace': 'fixupx.com'
+        'replace': 'fixvx.com'
     },
     'tiktok': {
         'domains': ['tiktok.com', 'www.tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com'],
@@ -20,7 +20,7 @@ PLATFORM_MAP = {
     },
     'instagram': {
         'domains': ['instagram.com', 'www.instagram.com'],
-        'replace': 'kkinstagram.com'
+        'replace': 'oginstagram.com'
     },
     'facebook': {
         'domains': ['facebook.com', 'www.facebook.com', 'fb.watch', 'www.fb.watch'],
@@ -37,10 +37,14 @@ PLATFORM_MAP = {
     'threads': {
         'domains': ['threads.net', 'www.threads.net', 'threads.com', 'www.threads.com'],
         'replace': 'vxthreads.com'
+    },
+    'spotify': {
+        'domains': ['open.spotify.com'],
+        'replace': 'open.spqtify.com'
     }
 }
 
-NORMAL_PLATFORMS = ['twitter', 'tiktok', 'instagram', 'pixiv', 'anilist', 'reddit', 'threads']
+NORMAL_PLATFORMS = ['twitter', 'tiktok', 'instagram', 'pixiv', 'anilist', 'reddit', 'threads', 'spotify']
 EXPERIMENTAL_PLATFORMS = ['facebook']
 
 class EmbedConfigView(discord.ui.View):

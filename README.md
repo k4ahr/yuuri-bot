@@ -4,13 +4,16 @@
 
 # Current functions
 * A honeypot channel setup to autoban spammers/bot accounts
-* Showing newest gas price in Vietnam
+* Showing newest gas price in multiple countries
 * Safebooru image search
 * Data encryption
 * String triggers
 * Word chains/Dictionary search
-* Auto embed fixers for multiple platforms (Facebook, Twitter/X, TikTok, Instagram, pixiv, AniList)
-* AniList integration  
+* Auto embed fixers for multiple platforms (Facebook, Twitter/X, TikTok, Instagram, pixiv, AniList, Reddit, Threads, Spotify)
+* AniList integration
+* Copypasta search
+* Quote/GIF image maker
+* [no-as-a-service](https://github.com/hotheadhacker/no-as-a-service/)
 * *More to be added in the future*
 
 

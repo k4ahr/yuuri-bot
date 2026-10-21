@@ -1,3 +1,4 @@
+FROM mwader/static-ffmpeg:latest AS ffmpeg
 FROM python:3.11-slim
 
 # Set environment variables
@@ -6,6 +7,10 @@ ENV PYTHONUNBUFFERED 1
 
 # Set the working directory in the container
 WORKDIR /app
+
+# Copy pre-compiled ffmpeg binaries (blazingly fast)
+COPY --from=ffmpeg /ffmpeg /usr/local/bin/
+COPY --from=ffmpeg /ffprobe /usr/local/bin/
 
 # Install dependencies
 COPY requirements.txt /app/

@@ -1,11 +1,28 @@
 import os
 import random
+import logging
+from pathlib import Path
 import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
 from core.web_server import start_web_server
+from core.data_manager import data_manager
 
 load_dotenv()
+
+async def get_prefix(bot, message):
+    if not message.guild:
+        return commands.when_mentioned_or("y!", "Y!")(bot, message)
+    prefix = await data_manager.get_prefix(message.guild.id)
+    if prefix.lower() == "y!":
+        return commands.when_mentioned_or("y!", "Y!")(bot, message)
+    
+    prefixes = [prefix]
+    if prefix != prefix.lower():
+        prefixes.append(prefix.lower())
+    if prefix != prefix.upper():
+        prefixes.append(prefix.upper())
+    return commands.when_mentioned_or(*prefixes)(bot, message)
 
 def load_quotes():
     try:
@@ -22,7 +39,7 @@ class YuuriBot(commands.Bot):
         intents.message_content = True
         
         super().__init__(
-            command_prefix="y!",
+            command_prefix=get_prefix,
             intents=intents,
             case_insensitive=True,
             help_command=None # Removed default help command
@@ -37,24 +54,21 @@ class YuuriBot(commands.Bot):
     async def setup_hook(self):
         self.change_status.start()
         # Load cogs
-        for filename in os.listdir("./cogs"):
-            if filename.endswith(".py") and not filename.startswith("__"):
+        logger = logging.getLogger('discord')
+        cogs_dir = Path("./cogs")
+        for file in cogs_dir.glob("*.py"):
+            if not file.name.startswith("__"):
                 try:
-                    await self.load_extension(f"cogs.{filename[:-3]}")
-                    print(f"Loaded extension: {filename}")
+                    await self.load_extension(f"cogs.{file.stem}")
+                    logger.info(f"Loaded extension: {file.name}")
                 except Exception as e:
-                    print(f"Failed to load extension {filename}: {e}")
+                    logger.error(f"Failed to load extension {file.name}: {e}")
                     
-        # Sync slash commands globally
-        print("Syncing slash commands...")
-        await self.tree.sync()
-        print("Slash commands synced!")
-        
         # Start OAuth Web Server
         try:
             await start_web_server(self)
         except Exception as e:
-            print(f"Failed to start web server: {e}")
+            logger.error(f"Failed to start web server: {e}")
 
     @tasks.loop(minutes=10)
     async def change_status(self):
@@ -67,13 +81,17 @@ class YuuriBot(commands.Bot):
         await self.wait_until_ready()
 
     async def on_ready(self):
-        print(f"Logged in as {self.user.name} ({self.user.id})")
-        print("------")
+        logger = logging.getLogger('discord')
+        logger.info(f"Logged in as {self.user.name} ({self.user.id})")
+        logger.info("------")
 
 if __name__ == "__main__":
+    discord.utils.setup_logging()
+    logger = logging.getLogger('discord')
+    
     bot = YuuriBot()
     token = os.getenv("DISCORD_TOKEN")
     if not token:
-        print("Error: DISCORD_TOKEN not found in environment variables.")
+        logger.error("DISCORD_TOKEN not found in environment variables.")
         exit(1)
-    bot.run(token)
+    bot.run(token, log_handler=None)
