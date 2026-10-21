@@ -219,25 +219,44 @@ class GifMakerView(discord.ui.View):
             try:
                 img = Image.open(io.BytesIO(current_bytes))
             except Exception as e:
-                print(f"Error opening image: {e}")
+                print(f"[GifMaker] Error opening image: {e}")
                 return None
-                
+
             frames = []
             durations = []
-            
+
             if action == "bubble":
                 direction = kwargs.get("direction", "right")
                 try:
                     bubble = Image.open(f"assets/images/bubble_{direction}.png").convert("RGBA")
                 except Exception:
                     bubble = None
-                    
-            for frame in ImageSequence.Iterator(img):
-                f = frame.copy()
+
+            # Use seek-based extraction so animated AVIF frames are not missed.
+            n = getattr(img, 'n_frames', None)
+
+            if n and n > 1:
+                raw_frames = []
+                raw_durations = []
+                for i in range(n):
+                    try:
+                        img.seek(i)
+                    except EOFError:
+                        break
+                    raw_frames.append(img.copy())
+                    raw_durations.append(img.info.get('duration', 100))
+            else:
+                raw_frames = []
+                raw_durations = []
+                for frame in ImageSequence.Iterator(img):
+                    raw_frames.append(frame.copy())
+                    raw_durations.append(frame.info.get('duration', 100))
+
+            for frame, dur in zip(raw_frames, raw_durations):
+                f = frame
                 if f.mode != 'RGBA':
                     f = f.convert('RGBA')
-                    
-                dur = frame.info.get('duration', 100)
+
                 if action == "speed":
                     mult = kwargs.get('multiplier', 1.0)
                     dur = int(dur / mult)
@@ -555,20 +574,48 @@ class GifMakerCog(commands.Cog):
                 
             chosen_fmt = prompt_view.format_chosen
 
+        def _extract_frames(img):
+            """Extract all frames and durations from an image.
+
+            Uses seek-based iteration (more reliable for AVIF and other formats
+            where ImageSequence.Iterator may silently stop at frame 0).
+            Falls back to the iterator when n_frames is not available.
+            """
+            frames = []
+            durations = []
+            n = getattr(img, 'n_frames', None)
+            if n and n > 1:
+                for i in range(n):
+                    try:
+                        img.seek(i)
+                    except EOFError:
+                        break
+                    f = img.copy()
+                    durations.append(img.info.get('duration', 100))
+                    frames.append(f)
+            else:
+                # Fallback: iterator (works for GIF, WebP, APNG, etc.)
+                for frame in ImageSequence.Iterator(img):
+                    f = frame.copy()
+                    durations.append(frame.info.get('duration', 100))
+                    frames.append(f)
+            return frames, durations
+
         def convert_to_animated(b, target_fmt):
             try:
                 img = Image.open(io.BytesIO(b))
-                frames = []
-                durations = []
                 fmt = target_fmt.upper()
                 target_mode = 'RGB' if fmt == 'GIF' else 'RGBA'
-                for frame in ImageSequence.Iterator(img):
-                    f = frame.copy()
+
+                frames, durations = _extract_frames(img)
+
+                converted = []
+                for f in frames:
                     if f.mode != target_mode:
                         f = f.convert(target_mode)
-                    frames.append(f)
-                    durations.append(frame.info.get('duration', 100))
-                
+                    converted.append(f)
+                frames = converted
+
                 out = io.BytesIO()
                 save_kwargs = {
                     'format': fmt,
@@ -582,7 +629,7 @@ class GifMakerCog(commands.Cog):
                 elif fmt == 'GIF':
                     save_kwargs['disposal'] = 2
                     save_kwargs['optimize'] = False
-                
+
                 if len(frames) == 1:
                     frames.append(frames[0].copy())
                     durations.append(100)
@@ -590,11 +637,11 @@ class GifMakerCog(commands.Cog):
                     save_kwargs['duration'] = durations
                     save_kwargs['save_all'] = True
                     save_kwargs['loop'] = 0
-                    
+
                 frames[0].save(out, **save_kwargs)
                 return out.getvalue()
             except Exception as e:
-                print(f"Error converting to {target_fmt} on import: {e}")
+                print(f"[GifMaker] Error converting to {target_fmt} on import: {e}")
                 return b
 
         if not (is_video and chosen_fmt == 'webp') and not is_animated_img:
